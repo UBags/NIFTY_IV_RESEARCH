@@ -1,13 +1,13 @@
 import sys,unittest,tempfile,sqlite3,datetime as dt,math
 from pathlib import Path
 from types import SimpleNamespace
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
-from prepare_research_cache import DDL,TIMES
-from quant_v3 import parity_ols,trailing_rv,black_forward
-from contract_specs_v2 import rule_lot_size
-from calendar_research import Data,simulate,estimate_mark
-from candidate_core import generate
-from rank_strategies import portfolio,fold_ranges,choose
+sys.path[:0]=[str(Path(__file__).resolve().parents[1]/"src"),str(Path(__file__).resolve().parents[1])]
+from nifty_iv.data.research_cache import DDL,TIMES
+from nifty_iv.ivcal.quant_v3 import parity_ols,trailing_rv,black_forward
+from nifty_iv.core.contract_specs import rule_lot_size
+from nifty_iv.ivcal.calendar_research import Data,simulate,estimate_mark
+from nifty_iv.ivcal.candidate_core import generate
+from nifty_iv.ivcal.rank_strategies import portfolio,fold_ranges,choose
 from collections import Counter
 
 
@@ -158,7 +158,7 @@ class V3Tests(unittest.TestCase):
         self.assertGreater(len(r['ledger']),0)
 
     def test_verified_settlement_override(self):
-        from settlements_v3 import SettlementMaster
+        from nifty_iv.ivcal.settlements import SettlementMaster
         d=self.make();c=config();cand=self.candidate(d,c)
         d.db.execute('DELETE FROM opt WHERE provider=? AND ts=? AND expiry=? AND strike=? AND cp=?',
             (c.provider,cand['short_expiry']+' 15:16:00',cand['short_expiry'],cand['strike'],'PE'))
@@ -183,7 +183,7 @@ class V3Tests(unittest.TestCase):
 
     def test_solver_reconstructs_and_invalid_bounds(self):
         import numpy as np
-        from quant_fast_v3 import invert_and_greeks
+        from nifty_iv.ivcal.quant_fast_v3 import invert_and_greeks
         f=np.array([25000.,25000.,25000.,25000.]);k=np.array([25000.,23000.,26000.,25000.])
         t=np.array([7,45,90,7])/365.25
         cp=np.array(['PE','CE','PE','PE']);r=np.array([.06]*4);v=np.array([.2,.35,.12,.2])

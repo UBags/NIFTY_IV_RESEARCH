@@ -3,15 +3,15 @@ Synthetic only; none of this is evidence of profitability."""
 import sys,unittest,tempfile,sqlite3,math,datetime as dt,random,collections,json
 from pathlib import Path
 from types import SimpleNamespace
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path[:0]=[str(Path(__file__).resolve().parents[1]/"src"),str(Path(__file__).resolve().parents[1])]
 import numpy as np
-import zone_signals as zs
-import zone_backtest as zb
-import zone_paths as zp
-import zone_grid as zg
-import zone_rules as zru
-import zone_report as zr
-from contract_specs_v2 import LotMaster
+from nifty_iv.zone import signals as zs
+from nifty_iv.zone import backtest as zb
+from nifty_iv.zone import paths as zp
+from nifty_iv.zone import grid as zg
+from nifty_iv.zone import rules as zru
+from nifty_iv.zone.legacy import report as zr
+from nifty_iv.core.contract_specs import LotMaster
 from tests.test_zone import Market,sessions,walk
 
 def pcfg(**kw):
@@ -160,7 +160,7 @@ class Selection(unittest.TestCase):
 
 class Futures(unittest.TestCase):
     def test_futures_path_matches_benchmark(self):
-        import zone_futures as zf
+        from nifty_iv.zone.legacy import futures as zf
         days=sessions('2024-01-02',10);mins=walk(days,drift=.3);bars=zs.aggregate(mins,45);final=['G']*30+['R']*(len(bars)-30)
         listing={d:{'2024-01-11','2024-01-18'} for d in days}
         c=SimpleNamespace(brokerage=0.,gst=.18,hedge_bps=0.,hedge_statutory=False,slippage_points=0.,lots=1,atr_mult=1.,min_short_days=4,contract_master=None)
@@ -192,7 +192,7 @@ class EndToEnd(Market):
 class Coverage(unittest.TestCase):
     """V4.8.5: zone_coverage.py classifies each recorded gap against the options file."""
     def test_classes(self):
-        import zone_coverage as zc,zone_contracts as zk,io,contextlib,csv
+        import io,contextlib,csv;from nifty_iv.zone import coverage as zc;from nifty_iv.zone import contracts as zk
         d=Path(tempfile.mkdtemp());o=sqlite3.connect(d/'o.sqlite');o.executescript(zk.DDL)
         o.executemany('INSERT INTO listing VALUES(?,?,?)',[('2024-01-02','a','2024-01-04'),('2024-01-02','a','2024-03-28'),('2024-01-03','b','2024-01-04')])
         o.executemany('INSERT INTO targets VALUES(?,?,?,?)',[('2024-01-02','2024-03-28',21000.,'PE'),('2024-01-02','2024-03-28',20900.,'PE')])
@@ -548,7 +548,7 @@ class DataGapLegs(Market):
 class Portfolio(unittest.TestCase):
     """V4.9: green + red portfolio on rupee returns, yearly floors and combined daily drawdown."""
     def setUp(self):
-        import zone_portfolio as zpf;self.zpf=zpf
+        from nifty_iv.zone import portfolio as zpf;self.zpf=zpf
         self.days=[d for d in (dt.date(2022,12,1)+dt.timedelta(i) for i in range(500)) if d.weekday()<5]
         self.sd=[d.isoformat() for d in self.days];self.so=np.array([d.toordinal() for d in self.days])
     def tr(self,e0,e1,unit,units=750.,marks=None,sign=1.,index=20000.):
@@ -592,7 +592,7 @@ class Portfolio(unittest.TestCase):
 class PortfolioV493(unittest.TestCase):
     """Review cases V4.9.1-V4.9.2 (AT01-AT14, AT17, AT20 of the V4.9.2 review) on the V4.9.3 portfolio."""
     def setUp(self):
-        import zone_portfolio as zpf;self.zpf=zpf
+        from nifty_iv.zone import portfolio as zpf;self.zpf=zpf
         self.days=[d for d in (dt.date(2022,12,1)+dt.timedelta(i) for i in range(800)) if d.weekday()<5]
         self.sd=[d.isoformat() for d in self.days];self.so=np.array([d.toordinal() for d in self.days]);self.close=np.full(len(self.so),20000.)
     def tr(self,e0,e1,unit,units=650.,marks=None,sign=1.,index=20000.,lot=65,sb=None):
@@ -765,7 +765,7 @@ class GridV491(Market):
             t=D.trades(sel,lo,'2025-01-01',flat=True);self.assertEqual([x['signal_bar'] for x in t],[10])
             self.assertEqual(t[0]['lot'],LotMaster(None).get(t[0]['entry_day'],'2024-01-11').qty);self.assertGreaterEqual(t[0]['marks_n'],t[0]['stale'])
     def test_T08_portfolio_refuses_a_modified_grid_file(self):
-        import zone_portfolio as zpf
+        from nifty_iv.zone import portfolio as zpf
         p,_,_=self._grid();out=Path(tempfile.mkdtemp());zg.run_grid(p,out,'2023-06-01','2025-01-01',progress=False,compound=False)
         f=sorted(out.glob('grid_*.npz'))[0];b=bytearray(f.read_bytes());b[-30]^=1;f.write_bytes(bytes(b))
         with self.assertRaises(SystemExit):zpf.main(['--grid',str(out),'--paths',str(p),'--out',str(out/'pf')])
@@ -809,11 +809,11 @@ class PortfolioV494(PortfolioV493):
         s=dict(years=[2025],overall_simple=.30,worst=.30,daily_close_drawdown_continuous=0,funds_short_sessions=0,every_year_deployable=True)
         self.assertEqual(self.zpf.verdict(s,[],.22,.17,2.5e5)['oos_verdict'],'INSUFFICIENT EVIDENCE');self.assertEqual(self.zpf.verdict(s,[],.22,.17,2.5e5,min_full_years=1)['oos_verdict'],'PASS')
     def test_AT493_08_holdout_code_is_in_the_digest(self):
-        f=Path(self.zpf.__file__).with_name('zone_holdout.py');orig=f.read_bytes();d0=self.zpf.code_digest()
+        f=Path(self.zpf.__file__).with_name('holdout.py');orig=f.read_bytes();d0=self.zpf.code_digest()
         try:f.write_bytes(orig+b'\n# probe\n');self.assertNotEqual(self.zpf.code_digest(),d0)
         finally:f.write_bytes(orig)
     def test_AT493_09_coverage_problems(self):
-        import zone_holdout as zh
+        from nifty_iv.zone import holdout as zh
         self.assertEqual(zh.coverage_problems(['2025-01-01','2025-01-02'],'2025-01-01','2025-01-03'),[])
         self.assertTrue(zh.coverage_problems(['2025-01-01','2025-02-01'],'2025-01-01','2025-02-02'))
         self.assertTrue(zh.coverage_problems(['2025-01-01'],'2025-01-01','2025-03-01'))
@@ -844,7 +844,7 @@ class PortfolioV495(PortfolioV493):
         s,*_=self.zpf.account_summary(acc,A,np.zeros(T),np.zeros(T),{},[],[2023],0,start_date='2023-01-01');self.assertAlmostEqual(s['overall_simple'],.22,9)
         self.assertEqual(self.zpf.horizon_end(sd[:200],'2024-01-01'),dt.date.fromisoformat(sd[199])+dt.timedelta(1))       # data stops early: no padding
     def test_A494_07_08_holdout_completeness(self):
-        import zone_holdout as zh
+        from nifty_iv.zone import holdout as zh
         wk=[(dt.date(2025,1,1)+dt.timedelta(i)).isoformat() for i in range(90) if (dt.date(2025,1,1)+dt.timedelta(i)).weekday()<5]
         self.assertTrue(zh.coverage_problems(wk[::2],'2025-01-01','2025-04-01',holidays=[]))                                # half the weekdays gone: caught
         self.assertTrue(zh.coverage_problems(wk[::2],'2025-01-01','2025-04-01'))                                           # weak check catches it too
@@ -854,7 +854,7 @@ class PortfolioV495(PortfolioV493):
 
 class HoldoutV493(GridV491):
     def test_AT17_holdout_runs_once_and_refuses_changes(self):
-        import zone_portfolio as zpf,zone_holdout as zh
+        from nifty_iv.zone import portfolio as zpf;from nifty_iv.zone import holdout as zh
         with self.assertRaises(ValueError):zg.run_grid('x','y','2023-01-01','2025-06-01')          # the API refuses a training split inside the holdout
         p,days,bars=self._grid();d=Path(tempfile.mkdtemp());old=zg.HOLDOUT_START;zg.HOLDOUT_START=days[0]
         try:
@@ -903,7 +903,7 @@ class SequenceParity(unittest.TestCase):
 
 class TenorCoverage(unittest.TestCase):
     def test_h1_h2_from_listing(self):
-        import zone_coverage as zc
+        from nifty_iv.zone import coverage as zc
         listing={'2024-01-02':{'2024-01-04','2024-01-25','2024-02-29'},'2024-01-08':{'2024-01-11','2024-01-25'},'2024-01-15':{'2024-01-18','2024-01-25','2024-02-29'}}
         r={x['year']:x for x in zc.tenor_coverage(listing)}['2024']
         self.assertEqual((r['days'],r['h1_policy_eligible'],r['h1_listed'],r['h2_listed']),(3,1,1,2))   # 2 Jan: 23 days to 25 Jan; 8 Jan: 17 days; Feb monthly listed on 2 and 15 Jan
@@ -912,21 +912,21 @@ class TenorCoverage(unittest.TestCase):
 class StrategySpecV496(unittest.TestCase):
     """User decisions of 2026-11-12: margin table (upper end), side-aware ITM / OTM levels with an index-level step, monthly expiry policies."""
     def test_margin_table_upper_end_and_lots_in_budget(self):
-        import strategy_spec as ss
+        from nifty_iv.core import strategy_spec as ss
         self.assertEqual(ss.margin_per_lot('2022-06-01',50),115000.);self.assertEqual(ss.margin_per_lot('2024-06-03',25),80000.)
         self.assertAlmostEqual(ss.margin_per_lot('2025-03-03',75),250000.);self.assertAlmostEqual(ss.margin_per_lot('2026-02-02',65),200000.)
         self.assertEqual([ss.max_lots(d,l,2.5e6) for d,l in (('2022-06-01',50),('2024-06-03',25),('2025-03-03',75),('2026-02-02',65))],[21,31,10,12])
         self.assertAlmostEqual(ss.margin_per_lot('2024-12-10',25),25*250000/75)     # a lot-25 contract in the lot-75 period: per unit
         with self.assertRaises(ValueError):ss.margin_row('2003-12-31')
     def test_levels_are_side_aware_with_index_step(self):
-        import strategy_spec as ss
+        from nifty_iv.core import strategy_spec as ss
         self.assertEqual([ss.distance_step(x) for x in (4999,5000,11999,12000)],[50,100,100,200])
         self.assertEqual([ss.strike_for('bull',20040,l) for l in (5,1,0,-1,-5)],[19000.,19800.,20000.,20200.,21000.])   # puts: OTM below, ITM above
         self.assertEqual([ss.strike_for('bear',20040,l) for l in (5,1,0,-1,-5)],[21000.,20200.,20000.,19800.,19000.])   # calls: OTM above, ITM below
         self.assertEqual([ss.strike_for('bull',8030,l) for l in (1,-2)],[7900.,8200.]);self.assertEqual(ss.strike_for('bear',4030,3),4200.)   # steps 100 and 50 (ATM to 50)
         self.assertEqual(ss.LEVELS,tuple(range(-5,6)))
     def test_expiry_policies(self):
-        import strategy_spec as ss
+        from nifty_iv.core import strategy_spec as ss
         exps=['2024-01-04','2024-01-11','2024-01-18','2024-01-25','2024-02-29','2024-03-28']
         self.assertEqual(ss.select_short_expiry('naked','2024-01-02',exps),('2024-01-04',None) if ss.days_between('2024-01-02','2024-01-04')>=4 else ('2024-01-11',None))
         self.assertEqual(ss.select_short_expiry('naked_m1','2024-01-02',exps),('2024-01-25',None))                       # 23 days >= 21
@@ -943,7 +943,7 @@ class PathsV496(Market):
         pair,_=sim.open_pair(0,'bull','naked',-1);self.assertEqual(pair['held'][0][0][1],20200.)                          # ITM put
         pair,_=sim.open_pair(0,'bull','naked_m1',1);self.assertEqual((pair['held'][0][0][0],pair['held'][0][0][1]),('2024-01-25',19800.))
         pair,_=sim.open_pair(0,'bull','naked_m2',0);self.assertEqual(pair['held'][0][0][0],'2024-02-29')
-        lot=LotMaster(None).get(self.days[0],'2024-01-25').qty;self.assertEqual(sim.lots_for(lot,self.days[0]),__import__('strategy_spec').max_lots(self.days[0],lot,2.5e6))
+        lot=LotMaster(None).get(self.days[0],'2024-01-25').qty;self.assertEqual(sim.lots_for(lot,self.days[0]),__import__('nifty_iv.core.strategy_spec',fromlist=['_']).max_lots(self.days[0],lot,2.5e6))
 
 class PortfolioV496(PortfolioV493):
     """V4.9.5 review: exhaustive executable qualification and executable ranking, complete-year evidence, coverage, contract checks."""
@@ -961,7 +961,7 @@ class PortfolioV496(PortfolioV493):
         self.assertEqual(self.zpf.verdict(dict(s,years=[2025,2026],full_years=[2025]),[],.22,.17,2.5e5,min_full_years=1)['oos_verdict'],'PASS')
         self.assertTrue(self.zpf.is_full_year(2024,366));self.assertFalse(self.zpf.is_full_year(2024,365));self.assertFalse(self.zpf.is_full_year(2026,95))
     def test_A495_05_06_expected_bars_per_session(self):
-        import zone_holdout as zh
+        from nifty_iv.zone import holdout as zh
         wk=[(dt.date(2025,1,1)+dt.timedelta(i)).isoformat() for i in range(31) if (dt.date(2025,1,1)+dt.timedelta(i)).weekday()<5]
         full={d:set(zh.EXPECTED_BAR_ENDS) for d in wk};three={d:set(zh.EXPECTED_BAR_ENDS[:3]) for d in wk}
         self.assertEqual(zh.coverage_problems(wk,'2025-01-01','2025-02-01',holidays=[],bar_ends=full),[])
@@ -986,12 +986,12 @@ class PortfolioV496(PortfolioV493):
 class StrategySpecV497(unittest.TestCase):
     """V4.9.7 (user): one entry = ceil(40% of the margin-table maximum lots)."""
     def test_entry_lots_is_forty_percent_rounded_up(self):
-        import strategy_spec as ss
+        from nifty_iv.core import strategy_spec as ss
         for day,lot,mx,el in (('2026-03-02',65,12,5),('2025-03-03',75,10,4),('2022-06-01',50,21,9),('2024-06-03',25,31,13)):
             self.assertEqual(ss.max_lots(day,lot,2.5e6),mx);self.assertEqual(ss.entry_lots(day,lot,2.5e6),el);self.assertEqual(ss.entry_lots(day,lot,2.5e6,1.),mx)
         self.assertEqual(ss.entry_lots('2025-03-03',75,1e5),1)                                   # never below one lot
     def test_paths_and_portfolio_use_the_same_rule(self):
-        import zone_portfolio as zpf,strategy_spec as ss
+        from nifty_iv.zone import portfolio as zpf;from nifty_iv.core import strategy_spec as ss
         sim=zp.PathSim.__new__(zp.PathSim);sim.cfg=pcfg(target_margin=2.5e6,target_fraction=.4)
         sz=zpf.Sizing('exchange',650.,10,None,'reference',2.5e6,.4)
         for day,lot in (('2026-03-02',65),('2025-03-03',75),('2022-06-01',50)):
@@ -1059,14 +1059,14 @@ class PortfolioV497(PortfolioV493):
 
 class CoverageV497(unittest.TestCase):
     def test_moneyness_from_strike_and_atm(self):
-        import zone_coverage as zc
+        from nifty_iv.zone import coverage as zc
         self.assertEqual(zc.moneyness('PE',20200-20000),'ITM200');self.assertEqual(zc.moneyness('PE',19800-20000),'OTM200')
         self.assertEqual(zc.moneyness('CE',19800-20000),'ITM200');self.assertEqual(zc.moneyness('CE',0),'ATM')
 
 class SelectionDryRunV497(unittest.TestCase):
     """Dry run of the V4.9.7 selection on a synthetic grid directory with three full years: band, leave-one-year-out, fill gate."""
     def _grid_dir(self):
-        import zone_rules as zr
+        from nifty_iv.zone import rules as zr
         out=Path(tempfile.mkdtemp());start,split='2021-09-01','2025-01-01';wins=zg.windows(start,split);wn=[w[0] for w in wins]
         configs=[f'N3_k{k}_m8_j0.5_tw2' for k in ('0.25','0.5','0.75','1.0','1.25')];P=zr.profit_rules('naked');S=zg.stop_chunks(zr.stop_rules('naked'))['pts']
         C,W,NP,NS=len(configs),len(wn),len(P),len(S);rnd=np.random.default_rng(7)
@@ -1105,7 +1105,7 @@ class SelectionDryRunV497(unittest.TestCase):
 
 class PortfolioRunV497(GridV491):
     def test_run_without_three_training_years_has_no_walk_forward(self):
-        import zone_portfolio as zpf,io,contextlib
+        import io,contextlib;from nifty_iv.zone import portfolio as zpf
         p,_,_=self._grid();out=Path(tempfile.mkdtemp());zg.run_grid(p,out,'2023-06-01','2025-01-01',progress=False,compound=False)
         with contextlib.redirect_stdout(io.StringIO()):rep,wf,ins,gates=zpf.run(out,p,out/'pf',target=.0001,floor=-10.,max_dd=1e12,progress=False,min_trades=1,wf_min_trades=1)
         self.assertEqual(rep['planned_test_years'],[]);self.assertIn('no walk-forward year',rep['walk_forward_note']);self.assertEqual(wf,[])
@@ -1131,7 +1131,7 @@ class AllocatedBasisV497(PortfolioV493):
 class CliDryRunV497(Market):
     """V4.9.7: the command-line entry points end to end on a synthetic extraction (zone_paths -> zone_grid -> zone_portfolio)."""
     def test_paths_grid_portfolio_mains(self):
-        import io,contextlib,zone_portfolio as zpf
+        import io,contextlib;from nifty_iv.zone import portfolio as zpf
         self.build();d=Path(self.tmp.name);old=sys.argv
         try:
             sys.argv=['zone_paths.py','--options',str(self.op),'--spot',str(self.sp),'--structures','naked,futures_zone','--target-margin','2500000','--out',str(d/'p.sqlite')]
@@ -1152,7 +1152,7 @@ class MarginStopV498(Market):
         db.executemany('INSERT INTO bars VALUES(?,?,?,?,?,?,?,?)',[(i,b.day,zs.hhmm(b.end),b.open,b.high,b.low,b.close,'G') for i,b in enumerate(bars)])
         zp.PathSim(m,bars,['G']*len(bars),pcfg(lots=1)).run({0:['bull']},('naked',),(0,),sink=zp.writer(db),progress=False);return db
     def test_mloss_fires_at_the_first_close_beyond_the_margin_share(self):
-        import strategy_spec as ss
+        from nifty_iv.core import strategy_spec as ss
         db=self._db();fb,eb,units,day,blob=db.execute('SELECT first_bar,end_bar,units,entry_day,data FROM paths').fetchone();n=eb-fb+1
         r={k:np.array(v) for k,v in zp.unpack(blob,n).items()};mg=units*ss.margin_per_unit(day)
         mark=np.zeros(n);mark[2]=-.03*mg;mark[4]=-.052*mg;mark[5]=-.08*mg;r['mark']=mark
@@ -1162,7 +1162,7 @@ class MarginStopV498(Market):
         self.assertEqual(list(F),[2,4,5,n-1])                                          # 10% never reached: natural end
         self.assertIn('mloss5',zru.stop_rules('futures_zone'));self.assertIn('c:mloss5|none|none',zru.compound_rules('naked'))
     def test_cutoff_script_uses_the_stored_exit_fill(self):
-        import strategy_spec as ss,dd_cutoffs as dc
+        from nifty_iv.core import strategy_spec as ss;from nifty_iv.diagnostics import dd_cutoffs as dc
         db=self._db();fb,eb,units,day,blob,pnl=db.execute('SELECT first_bar,end_bar,units,entry_day,data,end_pnl FROM paths').fetchone();n=eb-fb+1
         r={k:np.array(v) for k,v in zp.unpack(blob,n).items()};mg=units*ss.margin_per_unit(day)
         mark=np.zeros(n);mark[3]=-.06*mg;r['mark']=mark;r['cash_total']=np.full(n,100.);r['exit_cash']=np.full(n,-.07*mg);r['exit_bar']=np.arange(fb,fb+n)+1
@@ -1171,18 +1171,18 @@ class MarginStopV498(Market):
         self.assertAlmostEqual(v[5.][0],100-.07*mg);self.assertEqual(v[5.][1],fb+4);self.assertAlmostEqual(v[None][0],pnl);self.assertEqual(v[7.5],v[None])   # 7.5%: never reached
         P=dc.per_trade(tr,5.);self.assertEqual((P['trades'],P['stopped']),(1,1))
     def test_one_at_a_time_takes_more_trades_when_a_stop_frees_the_slot(self):
-        import dd_cutoffs as dc
+        from nifty_iv.diagnostics import dd_cutoffs as dc
         tr=[dict(sb=0,day='2023-01-02',v={None:(10.,20),5.:(-5.,4)}),dict(sb=6,day='2023-01-03',v={None:(7.,30),5.:(7.,30)}),dict(sb=25,day='2023-01-05',v={None:(-3.,40),5.:(-3.,40)})]
         self.assertEqual(dc.sequenced(tr,None),(2,7.,3.));self.assertEqual(dc.sequenced(tr,5.),(2,2.,5.))
     def test_cutoff_script_command_line(self):
-        import io,contextlib,dd_cutoffs as dc
+        import io,contextlib;from nifty_iv.diagnostics import dd_cutoffs as dc
         db=self._db();db.commit();f=Path(self.tmp.name)/'c.sqlite';d=sqlite3.connect(f);db.backup(d);d.close()
         with contextlib.redirect_stdout(io.StringIO()) as buf:dc.main(['--paths',str(f),'--cutoffs','bull,naked,0=5;bear,naked,0=5','--optimise','--out',str(Path(self.tmp.name)/'c.csv')])
         out=buf.getvalue();self.assertIn('ONE AT A TIME',out);self.assertIn('optimised',out);self.assertIn('no trades',out)   # bear: none in this file
 
 class DiagnoseV499(GridV491):
     def test_diagnose_runs_and_waiting_uses_the_marks(self):
-        import io,contextlib,zone_diagnose as zd
+        import io,contextlib;from nifty_iv.diagnostics import zone_diagnose as zd
         p,_,_=self._grid();db=sqlite3.connect(p)
         tr=zd.trades(db,'bull','naked',0.);self.assertTrue(tr)
         t=tr[0];self.assertAlmostEqual(zd.at(t,10**6),t['fin']);self.assertAlmostEqual(zd.at(t,1),float(t['mark'][0]) if np.isfinite(t['mark'][0]) else t['fin'])
@@ -1192,7 +1192,7 @@ class DiagnoseV499(GridV491):
 
 class PairExitsV499(GridV491):
     def test_pair_exit_search_runs_end_to_end(self):
-        import io,contextlib,pair_exits as pe
+        import io,contextlib;from nifty_iv.diagnostics import pair_exits as pe
         p,_,_=self._grid();out=Path(tempfile.mkdtemp());zg.run_grid(p,out,'2023-06-01','2025-01-01',progress=False,compound=False)
         G,n=pe.leg_candidates(out,zg.read_json(out/'grid_index.json'),('bull','naked',0.,'zone_only_tw2'),5,1,['2024'])
         self.assertTrue(G and n>=len(G));self.assertTrue(all(k[3]=='zone_only_tw2' for k in G))
@@ -1213,7 +1213,7 @@ class ClosestBandV499(PortfolioV493):
 
 class StrategyScanV4910(GridV491):
     def test_scan_applies_the_three_requirements_and_matches_a_trade_by_trade_replay(self):
-        import io,contextlib,csv as _csv,strategy_scan as ss_
+        import io,contextlib,csv as _csv;from nifty_iv.diagnostics import strategy_scan as ss_
         p,_,_=self._grid();out=Path(tempfile.mkdtemp())
         args=['--paths',str(p),'--judge-years','2024','--min-trades','1','--workers','1','--no-compound']
         with contextlib.redirect_stdout(io.StringIO()) as buf:ss_.main(args+['--min-mean','-1','--min-year','-1','--max-trade-dd','1','--out',str(out/'a.csv')])
@@ -1232,7 +1232,7 @@ class StrategyScanV4910(GridV491):
         self.assertIn('\n0 distinct strategies meet',buf.getvalue())
 class StrategyScanMarksV4911(MarginStopV498):
     def test_worst_trade_uses_the_marks_up_to_the_exit(self):
-        import io,contextlib,csv as _csv,strategy_scan as ss_,strategy_spec as ss
+        import io,contextlib,csv as _csv;from nifty_iv.diagnostics import strategy_scan as ss_;from nifty_iv.core import strategy_spec as ss
         db=self._db();db.execute("INSERT INTO signals VALUES('zone_only_tw2','bull',0)")
         fb,eb,units,blob=db.execute('SELECT first_bar,end_bar,units,data FROM paths').fetchone();n=eb-fb+1
         r={k:np.array(v) for k,v in zp.unpack(blob,n).items()};mark=np.zeros(n);mark[3]=-40000.;mark[6]=-90000.;r['mark']=mark

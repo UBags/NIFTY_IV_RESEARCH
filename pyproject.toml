@@ -1,0 +1,66 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nifty-iv-research"
+version = "4.9.11+research"   # PEP 440 form of src/nifty_iv/VERSION.txt (the release string written into run metadata)
+description = "NIFTY zone + swing option-selling research and relative-IV calendar research (research software, not a trading system)"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.26", "scipy>=1.11", "psycopg[binary]>=3.1"]
+
+[project.optional-dependencies]
+fast = ["numba>=0.59"]
+parquet = ["pandas", "pyarrow"]
+test = ["pytest"]
+
+[project.scripts]
+nifty-data-explain-month = "nifty_iv.data.explain_month:main"
+nifty-data-import-postgres = "nifty_iv.data.import_postgres:main"
+nifty-data-inspect-parquet = "nifty_iv.data.inspect_parquet:main"
+nifty-data-migrate = "nifty_iv.data.migrate:main"
+nifty-data-research-cache = "nifty_iv.data.research_cache:main"
+nifty-diag-dd-bins = "nifty_iv.diagnostics.dd_bins:main"
+nifty-diag-dd-cutoffs = "nifty_iv.diagnostics.dd_cutoffs:main"
+nifty-diag-dd-recovery = "nifty_iv.diagnostics.dd_recovery:main"
+nifty-diag-pair-exits = "nifty_iv.diagnostics.pair_exits:main"
+nifty-diag-strategy-scan = "nifty_iv.diagnostics.strategy_scan:main"
+nifty-diag-zone-diagnose = "nifty_iv.diagnostics.zone_diagnose:main"
+nifty-iv-audit-contract-coverage = "nifty_iv.ivcal.audit_contract_coverage:main"
+nifty-iv-audit-quality = "nifty_iv.ivcal.audit_quality:main"
+nifty-iv-audit-spot-sources = "nifty_iv.ivcal.audit_spot_sources:main"
+nifty-iv-benchmark-v3 = "nifty_iv.ivcal.benchmark_v3:main"
+nifty-iv-calendar-research = "nifty_iv.ivcal.calendar_research:main"
+nifty-iv-calibrate-slippage = "nifty_iv.ivcal.calibrate_slippage:main"
+nifty-iv-calibrate-spa = "nifty_iv.ivcal.calibrate_spa:main"
+nifty-iv-campaign-report = "nifty_iv.ivcal.campaign_report:main"
+nifty-iv-compare-fill-models = "nifty_iv.ivcal.compare_fill_models:main"
+nifty-iv-compare-structures = "nifty_iv.ivcal.compare_structures:main"
+nifty-iv-enrich-cache = "nifty_iv.ivcal.enrich_cache:main"
+nifty-iv-exit-lag-report = "nifty_iv.ivcal.exit_lag_report:main"
+nifty-iv-power-analysis = "nifty_iv.ivcal.power_analysis:main"
+nifty-iv-publish-results = "nifty_iv.ivcal.publish_results:main"
+nifty-iv-rank-strategies = "nifty_iv.ivcal.rank_strategies:main"
+nifty-zone-backtest = "nifty_iv.zone.backtest:main"
+nifty-zone-contracts = "nifty_iv.zone.contracts:main"
+nifty-zone-coverage = "nifty_iv.zone.coverage:main"
+nifty-zone-grid = "nifty_iv.zone.grid:main"
+nifty-zone-holdout = "nifty_iv.zone.holdout:main"
+nifty-zone-legacy-futures = "nifty_iv.zone.legacy.futures:main"
+nifty-zone-legacy-report = "nifty_iv.zone.legacy.report:main"
+nifty-zone-legacy-summary = "nifty_iv.zone.legacy.summary:main"
+nifty-zone-paths = "nifty_iv.zone.paths:main"
+nifty-zone-portfolio = "nifty_iv.zone.portfolio:main"
+nifty-zone-signals = "nifty_iv.zone.signals:main"
+nifty-zone-spot = "nifty_iv.zone.spot:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+nifty_iv = ["VERSION.txt", "data/migrations/*.sql"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src", "."]

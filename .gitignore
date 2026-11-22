@@ -1,10 +1,26 @@
 # Python
 __pycache__/
 *.pyc
+*.egg-info/
+build/
+dist/
 .venv/
 venv/
+.pytest_cache/
 
-# Data, caches and run outputs (large / generated)
+# IDE
+.idea/
+.vscode/
+
+# Market data (link or copy your Parquet tree to data/NIFTY_Data, or set NIFTY_DATA_ROOT)
+data/*
+!data/README.md
+
+# Run outputs: keep every --out under runs/
+runs/*
+!runs/README.md
+
+# Data, caches and outputs written anywhere else (large / generated)
 *.sqlite
 *.sqlite-*
 *.db
@@ -12,6 +28,8 @@ venv/
 *.csv
 *.xlsx
 *.log
+*.npz
+*.zip
 coverage*/
 pilot*/
 zone_grid*/

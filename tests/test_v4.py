@@ -3,26 +3,26 @@ import sys,unittest,tempfile,sqlite3,math,random,decimal
 from pathlib import Path
 from types import SimpleNamespace
 from collections import Counter
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path[:0]=[str(Path(__file__).resolve().parents[1]/"src"),str(Path(__file__).resolve().parents[1])]
 import os as _os;_os.environ.setdefault('NIFTY_HOLDOUT_LOG',str(Path(tempfile.mkdtemp())/'log.jsonl'))
 import numpy as np
 from tests.test_v3 import fixture,config
-from calendar_research import (delay_mode,campaign_economics,session_time_iv,attribute_leg,trend_fields,execute_fills,Data,simulate,fill_flow,exercise_stt_rate,settlement_reference,
+from nifty_iv.ivcal.calendar_research import (delay_mode,campaign_economics,session_time_iv,attribute_leg,trend_fields,execute_fills,Data,simulate,fill_flow,exercise_stt_rate,settlement_reference,
     synchronized_fills,quote_fill)
-from candidate_core import generate
-from enrich_cache import vendor_concordance
-from prepare_research_cache import num,whole,DAILY_SQL,session_quality,month_windows,finalize,FINAL_INDEXES,extraction_config,DDL
+from nifty_iv.ivcal.candidate_core import generate
+from nifty_iv.ivcal.enrich_cache import vendor_concordance
+from nifty_iv.data.research_cache import num,whole,DAILY_SQL,session_quality,month_windows,finalize,FINAL_INDEXES,extraction_config,DDL
 import hashlib
-import subprocess,json,lineage
-from audit_contract_coverage import audit_day
-from quant_v3 import yang_zhang_rv,black_forward
-from quant_fast_v3 import invert_and_greeks
-from calendar_research import parse_event_line,sessions_between,fly_width,scheduled_exit_day,path_digest,month_ranges,contract_digest,mtm_digest,holiday_audit
-from rank_strategies import prior_inspections,record_holdout_inspection,ratio,SIGNALS,freeze_mismatch,fixed_holdout_days,freeze_payload,done_by,fast_window,portfolio,GroupMatrix,choose,spa_matrix,basis_weights,nested_folds,persistent_nested_portfolio,fold_window_stats,circular_shift_control
-from settlements_v3 import SettlementMaster
+import subprocess,json;from nifty_iv.core import lineage as lineage
+from nifty_iv.ivcal.audit_contract_coverage import audit_day
+from nifty_iv.ivcal.quant_v3 import yang_zhang_rv,black_forward
+from nifty_iv.ivcal.quant_fast_v3 import invert_and_greeks
+from nifty_iv.ivcal.calendar_research import parse_event_line,sessions_between,fly_width,scheduled_exit_day,path_digest,month_ranges,contract_digest,mtm_digest,holiday_audit
+from nifty_iv.ivcal.rank_strategies import prior_inspections,record_holdout_inspection,ratio,SIGNALS,freeze_mismatch,fixed_holdout_days,freeze_payload,done_by,fast_window,portfolio,GroupMatrix,choose,spa_matrix,basis_weights,nested_folds,persistent_nested_portfolio,fold_window_stats,circular_shift_control
+from nifty_iv.ivcal.settlements import SettlementMaster
 import datetime as dt,json,os
 from unittest.mock import patch
-from stats_v4 import spa_test,bootstrap_summary
+from nifty_iv.ivcal.stats import spa_test,bootstrap_summary
 
 def daily(i,o,h,l,c,complete=1,**kw):
     return dict(day=f'2026-01-{i:02d}',open=o,high=h,low=l,close=c,complete_session=complete,**kw)
@@ -351,6 +351,8 @@ class FixedWindows(unittest.TestCase):
         self.assertEqual((b['entries'],b['carried_in']),(0,1))
 
 ROOT=Path(__file__).resolve().parents[1]
+ENV={**os.environ,'PYTHONPATH':os.pathsep.join([str(ROOT/'src'),os.environ.get('PYTHONPATH','')])}
+def mod(name):return [sys.executable,'-m','nifty_iv.ivcal.'+name.removesuffix('.py')]
 class V43(Base):
     """V4.2 deep-review acceptance tests (T57-T67 where runnable without PostgreSQL)."""
     def audit_cfg(self,**kw):
@@ -387,7 +389,7 @@ class V43(Base):
         adm={(day,r['strike'],r['long_expiry']) for day in d.days for _,reached,r in audit_day(d,a,day) if 'admitted' in reached}
         self.assertLessEqual(sims,adm)
     def enrich(self,path,vol):
-        p=subprocess.run([sys.executable,str(ROOT/'enrich_cache.py'),'--cache',str(path),'--min-pair-volume',str(vol),'--batch-rows','100'],capture_output=True,text=True)
+        p=subprocess.run([*mod('enrich_cache'),'--cache',str(path),'--min-pair-volume',str(vol),'--batch-rows','100'],capture_output=True,text=True,env=ENV)
         self.assertEqual(p.returncode,0,p.stderr)
     def test_t59_reenrichment_leaves_no_stale_greeks(self):
         d=self.make();self.enrich(self.path,1)
@@ -430,7 +432,7 @@ class V43(Base):
 
 class Blueprint(unittest.TestCase):
     def test_parity_prunes_a_single_bad_strike(self):
-        from quant_v3 import parity_ols
+        from nifty_iv.ivcal.quant_v3 import parity_ols
         q={}
         for k in (24600,24800,25000,25200,25400,25600):
             for cp in ('PE','CE'):q[float(k),cp]=dict(close=black_forward(25070,k,80/365,.2,cp,.065),volume=200)
@@ -438,7 +440,7 @@ class Blueprint(unittest.TestCase):
         r=parity_ols(q,25000,80/365,.06,max_residual_bps=40.)
         self.assertEqual(r.quality,'fit_ok');self.assertAlmostEqual(r.forward,25070,places=2);self.assertEqual(r.matched_pairs,5)
     def test_march_quarterly_keeps_old_lot_if_expiry_moves(self):
-        from contract_specs_v2 import rule_lot_size
+        from nifty_iv.core.contract_specs import rule_lot_size
         self.assertEqual(rule_lot_size('2025-12-15','2026-03-30').qty,75)
     def test_month_windows_cover_range(self):
         w=list(month_windows(dt.date(2025,1,15),dt.date(2025,3,2)))
@@ -682,7 +684,7 @@ class V441(Base):
         q=d.opt(c.provider,e['day'],'09:46',e['long_expiry'],e['strike'],'PE')
         self.assertEqual([x for x in simulate(d,c,e,'weekly','none','put')[0][0]['ledger'] if x['event']=='initial_long'][0]['reference_price'],q['close'])
     def test_compare_fill_models(self):
-        from compare_fill_models import compare
+        from nifty_iv.ivcal.compare_fill_models import compare
         t=Path(tempfile.mkdtemp())
         for name,p in (('a',10.),('b',4.)):
             db=sqlite3.connect(t/f'{name}.sqlite');db.executescript('CREATE TABLE trades(id,economic_id,pnl_inr,lot_units,status);CREATE TABLE fills(trade_id,seq,details);CREATE TABLE marks(trade_id,day,pnl_inr);')
@@ -691,12 +693,12 @@ class V441(Base):
         r=compare([('a',t/'a.sqlite'),('b',t/'b.sqlite')])['results'][1]
         self.assertEqual((r['paired_mean_diff_per_unit'],r['breakeven_extra_slippage_pts_per_traded_unit']),(-6.,1.))
     def test_auto_cutoff_uses_data_end_not_trade_exits(self):
-        from rank_strategies import resolve_holdout_cutoff as f
+        from nifty_iv.ivcal.rank_strategies import resolve_holdout_cutoff as f
         rows=[dict(target_tenor=120,exit_day='2026-02-01')]
         self.assertEqual(f('auto','2026-01-01',['2026-01-02','2026-07-01'],rows),'2026-03-03')
         self.assertIsNone(f('none','2026-01-01',['2026-07-01'],rows))
     def test_cutoff_before_split_is_refused(self):
-        from rank_strategies import resolve_holdout_cutoff as f
+        from nifty_iv.ivcal.rank_strategies import resolve_holdout_cutoff as f
         with self.assertRaises(SystemExit):f('auto','2026-06-01',['2026-07-01'],[dict(target_tenor=120)])
         with self.assertRaises(SystemExit):f('2026-01-15','2026-02-01',['2026-07-01'],[dict(target_tenor=120)])
     def test_ranking_refuses_changed_market_content(self):
@@ -756,7 +758,7 @@ class V442(Base):
         c2=config(fill_model='qualified_minute_close',fill_sync='independent',recenter_threshold=.001,min_fill_volume=100,min_exit_volume=101)
         self.assertFalse([x for x in simulate(d,c2,e,'rolling_recenter','none','put')[0][0]['ledger'] if x['event']=='recenter_old_long_exit'])
     def test_participation_gate(self):
-        from calendar_research import required_volume as f
+        from nifty_iv.ivcal.calendar_research import required_volume as f
         self.assertEqual(f(SimpleNamespace(max_participation=.1,volume_unit='contracts'),65,65,1),10)
         self.assertEqual(f(SimpleNamespace(max_participation=.1,volume_unit='units'),65,65,1),650)
         self.assertEqual(f(SimpleNamespace(max_participation=None),65,65,3),3)
@@ -775,7 +777,7 @@ class V442(Base):
         d.db.execute('UPDATE opt SET volume=volume*?',(e['qty'],));self.clear(d)
         self.assertAlmostEqual(simulate(d,c('units'),e,'weekly','none','put')[0][0]['pnl_inr'],a,places=6)
     def test_volume_unit_detection(self):
-        from calendar_research import detect_volume_unit as f
+        from nifty_iv.ivcal.calendar_research import detect_volume_unit as f
         d=self.make();lot=lambda day,ex:65
         self.assertEqual(f(d.db,'rissin_upstox',lot),'contracts')
         d.db.execute('UPDATE opt SET volume=volume*65');self.assertEqual(f(d.db,'rissin_upstox',lot),'units')
@@ -788,14 +790,14 @@ class V442(Base):
         p=65*100.5;levy=p*((.0003553+.000001)*1.18+.00003)
         self.assertAlmostEqual(fill_flow(100.,65,'2026-05-01',self.costs(),'2026-05-07',100)[0],-p-levy-23.6,places=8)
     def test_stt_and_exchange_schedule(self):
-        from calendar_research import exchange_rate as ex
+        from nifty_iv.ivcal.calendar_research import exchange_rate as ex
         c=self.costs();self.assertEqual((ex('2024-09-30',c),ex('2024-10-01',c)),(.000495,.0003553))
         self.assertEqual(ex('2026-05-01',self.costs(exchange_bps=3.)),.0003)
         sell=lambda day:fill_flow(100.,-65,day,self.costs(brokerage=0.,exchange_bps=0.,sebi_bps=0.),'2026-05-07',100)[0]
         self.assertAlmostEqual(sell('2024-09-30'),65*99.5*(1-.000625),places=8);self.assertAlmostEqual(sell('2024-10-01'),65*99.5*(1-.001),places=8)
         self.assertAlmostEqual(sell('2026-03-31'),65*99.5*(1-.001),places=8);self.assertAlmostEqual(sell('2026-04-01'),65*99.5*(1-.0015),places=8)
     def test_hedge_costs_by_side(self):
-        from calendar_research import hedge_cost as f
+        from nifty_iv.ivcal.calendar_research import hedge_cost as f
         c=SimpleNamespace(hedge_bps=1.,hedge_statutory=True,gst=.18,brokerage=20.);n=65*25000.
         base=n*.0001+n*(.0000183+.000001)*1.18+23.6
         self.assertAlmostEqual(f(65,25000.,'2026-05-01',c),base+n*.00002,places=6);self.assertAlmostEqual(f(-65,25000.,'2026-05-01',c),base+n*.0005,places=6)
@@ -817,11 +819,11 @@ class V442(Base):
         self.assertEqual(r['missing_marks']['stop_unobservable_checkpoints'],3)
         self.assertEqual(len([x for x in r['ledger'] if x['event']=='stop_unobservable']),3)
     def test_partial_day_stays_in_the_risk_calendar(self):
-        from rank_strategies import valuation_sessions as f
+        from nifty_iv.ivcal.rank_strategies import valuation_sessions as f
         self.assertEqual(f([dict(day='a',minute_bars=375,complete_session=1),dict(day='b',minute_bars=40,complete_session=0),dict(day='c',minute_bars=0,complete_session=0)]),['a','b'])
     def test_conditional_fill_model_refused_by_cli(self):
         root=Path(__file__).resolve().parents[1]
-        r=subprocess.run([sys.executable,str(root/'calendar_research.py'),'--fill-model','next_minute'],capture_output=True,text=True)
+        r=subprocess.run([*mod('calendar_research'),'--fill-model','next_minute'],capture_output=True,text=True,env=ENV)
         self.assertEqual(r.returncode,2);self.assertIn('conditions the fill',r.stderr)
 
 class V443(Base):
@@ -830,7 +832,7 @@ class V443(Base):
     causal=dict(fill_sync='synchronized',fill_model='next_bar_open')
     tariff=dict(slippage=0.,slippage_mode='flat',fill_model='',brokerage=20.,gst=.18,exchange_bps=None,sebi_bps=.01,stt=None,stamp=.00003)
     def test_cost01_order_modes_by_hand(self):
-        from calendar_research import charged_orders as f
+        from nifty_iv.ivcal.calendar_research import charged_orders as f
         n=lambda m,lots,**k:f(65*lots,65,SimpleNamespace(brokerage_order_mode=m,**k))
         for lots in (1,2,3,10):
             self.assertEqual(n('one_order_per_leg',lots),1);self.assertEqual(n('per_lot_orders',lots),lots)
@@ -840,7 +842,7 @@ class V443(Base):
         one=fill_flow(100.,195,'2026-05-05',c('one_order_per_leg'),'2026-06-30',1000,lot=65)[0];per=fill_flow(100.,195,'2026-05-05',c('per_lot_orders'),'2026-06-30',1000,lot=65)[0]
         self.assertAlmostEqual(one-per,47.2,places=8)
     def test_cost02_line_items_rebuild_the_cash_flow(self):
-        from calendar_research import fill_detail
+        from nifty_iv.ivcal.calendar_research import fill_detail
         cash,actual,_,x=fill_detail(100.,-130,'2026-05-05',SimpleNamespace(brokerage_order_mode='per_lot_orders',**self.tariff),'2026-06-30',1000,lot=65)
         p=130*actual;self.assertAlmostEqual(x['stt'],p*.0015);self.assertEqual(x['stamp'],0.);self.assertEqual(x['brokerage'],40.);self.assertAlmostEqual(x['gst'],(40+x['exchange']+x['sebi'])*.18)
         self.assertAlmostEqual(cash,p-sum(x[k] for k in ('brokerage','exchange','sebi','gst','stt','stamp')),places=8)
@@ -853,22 +855,22 @@ class V443(Base):
         b=simulate(d,config(lots=3,brokerage_order_mode='one_order_per_leg',**{k:v for k,v in kw.items() if k!='brokerage_order_mode'}),e,'weekly','none','put')[0][0]
         self.assertAlmostEqual(b['pnl_inr']-three['pnl_inr'],one['executed_fills']*2*23.6,places=6)
     def test_cost03_rate_boundaries(self):
-        from calendar_research import exchange_rate as ex,hedge_cost
+        from nifty_iv.ivcal.calendar_research import exchange_rate as ex,hedge_cost
         c=SimpleNamespace(**self.tariff);self.assertEqual(ex('2024-09-30',c),.000495);self.assertEqual(ex('2024-10-01',c),.0003553);self.assertEqual(ex('2026-02-28',c),ex('2026-03-01',c))
         h=SimpleNamespace(hedge_bps=0.,hedge_statutory=True,gst=0.,brokerage=0.);n=65*25000.
         self.assertAlmostEqual(hedge_cost(65,25000.,'2024-09-30',h)-hedge_cost(65,25000.,'2024-10-01',h),n*.0000015,places=6)
     def test_cost03_futures_brokerage_is_capped(self):
-        from calendar_research import hedge_cost
+        from nifty_iv.ivcal.calendar_research import hedge_cost
         h=SimpleNamespace(hedge_bps=0.,hedge_statutory=True,gst=0.,brokerage=20.)
         tiny=hedge_cost(.1,25000.,'2026-05-01',h)-.1*25000.*(.0000183+.000001+.00002);self.assertAlmostEqual(tiny,.75,places=6)
     def test_cost04_invalid_settings_refused(self):
-        from calendar_research import validate_config as v
+        from nifty_iv.ivcal.calendar_research import validate_config as v
         ok=dict(slippage=.5,brokerage=20.,hedge_bps=2.,sebi_bps=.01,exercise_fee=20.,gst=.18,stamp=.00003,mark_stress=.2,stt=None,exercise_stt=None,exchange_bps=None,max_participation=.1,lots=1,lots_per_order=1,fixed_orders=1,start='2025-01-01',end='2025-02-01')
         self.assertEqual(v(SimpleNamespace(**ok)),[])
         for k,x in (('slippage',-.1),('brokerage',-1.),('gst',-.1),('gst',1.5),('stamp',-1e-5),('stt',-.1),('exchange_bps',-1.),('sebi_bps',-.1),('exercise_fee',-1.),('hedge_bps',-1.),('max_participation',-.1),('max_participation',1.1),('lots',0),('lots_per_order',0),('start','2026-01-01')):
             self.assertTrue(v(SimpleNamespace(**{**ok,k:x})),(k,x))
         with self.assertRaises(ValueError):
-            from calendar_research import required_volume
+            from nifty_iv.ivcal.calendar_research import required_volume
             required_volume(SimpleNamespace(max_participation=-.1,volume_unit='units'),65,65,1)
     @staticmethod
     def bars(v47=50,c47=90.,v46=50):
@@ -894,14 +896,14 @@ class V443(Base):
             self.assertEqual({x['evidence_class'] for x in r['ledger'] if 'charges' in x},{label});self.assertFalse(any(x.get('executable_claim') for x in r['ledger']))
     def test_time02_close_model_refused_by_cli(self):
         root=Path(__file__).resolve().parents[1]
-        r=subprocess.run([sys.executable,str(root/'calendar_research.py'),'--fill-model','qualified_minute_close'],capture_output=True,text=True);self.assertEqual(r.returncode,2)
+        r=subprocess.run([*mod('calendar_research'),'--fill-model','qualified_minute_close'],capture_output=True,text=True,env=ENV);self.assertEqual(r.returncode,2)
     def test_time02_adverse_never_beats_open(self):
         d=self.make();e=self.cand(d,config())
         d.db.execute('UPDATE opt SET high=open+2,low=MAX(open-2,.05)');self.clear(d)
         a=simulate(d,config(**self.causal),e,'weekly','none','put')[0][0]['pnl_inr'];b=simulate(d,config(fill_sync='synchronized',fill_model='next_bar_open_adverse'),e,'weekly','none','put')[0][0]['pnl_inr']
         self.assertLess(b,a)
     def test_time03_every_minute_boundary(self):
-        from prepare_research_cache import TIMES
+        from nifty_iv.data.research_cache import TIMES
         d=self.make(bull=True);c=config(iv_convergence=.9,recenter_threshold=.01,max_short_long_width=2000.,**self.causal);e=self.cand(d,c);checked=0
         for day in (e['day'],'2026-01-08',e['short_expiry'],'2026-01-14'):
             for m in [x for x in TIMES if x!='15:29']:
@@ -915,7 +917,7 @@ class V443(Base):
     def months(self,d,first,second):
         d.db.execute("UPDATE opt SET volume=? WHERE substr(ts,1,7)='2026-01'",(first,));d.db.execute("UPDATE opt SET volume=? WHERE substr(ts,1,7)='2026-02'",(second,));d.db.execute("DELETE FROM opt WHERE substr(ts,1,7)>'2026-02'");d.db.execute("DELETE FROM spot_daily WHERE substr(day,1,7)>'2026-02'")
     def test_vol01_every_month_must_agree(self):
-        from calendar_research import detect_volume_unit as f,volume_unit_report as r
+        from nifty_iv.ivcal.calendar_research import detect_volume_unit as f,volume_unit_report as r
         lot=lambda day,ex:65
         d=self.make();self.months(d,130,195);self.assertEqual(f(d.db,'rissin_upstox',lot),'units')
         self.months(d,131,197);self.assertEqual(f(d.db,'rissin_upstox',lot),'contracts')
@@ -925,7 +927,7 @@ class V443(Base):
         self.assertIsNotNone(simulate(d,config(lots=10,max_participation=.1,volume_unit='contracts',**self.causal),e,'weekly','none','put')[0])
         self.assertIsNone(simulate(d,config(lots=11,max_participation=.1,volume_unit='contracts',**self.causal),e,'weekly','none','put')[0])
     def test_sig01_every_quantile_signal_has_rules(self):
-        from rank_strategies import signal_grid,QUANTILE_SIGNALS,SIGNALS
+        from nifty_iv.ivcal.rank_strategies import signal_grid,QUANTILE_SIGNALS,SIGNALS
         random.seed(3)
         self.assertLessEqual(QUANTILE_SIGNALS,set(SIGNALS))
         for sig in QUANTILE_SIGNALS:
@@ -933,10 +935,10 @@ class V443(Base):
             self.assertEqual(len(g),9)
             self.assertTrue(all(sum(1 for x in v if x is not None and lo<=x<hi)>0 for _,lo,hi in g))
     def test_sig01_ratio_signals_keep_the_ratio_grid(self):
-        from rank_strategies import signal_grid
+        from nifty_iv.ivcal.rank_strategies import signal_grid
         self.assertEqual(signal_grid('iv_ratio',[1.1],[1.],[1.5,999],[.5]),[(('iv_ratio',1.,1.5),1.,1.5),(('iv_ratio',1.,999),1.,999)])
     def test_sig01_fold_thresholds_use_only_its_past(self):
-        from rank_strategies import nested_folds
+        from nifty_iv.ivcal.rank_strategies import nested_folds
         days=[f'2026-{m:02d}-{d:02d}' for m in (1,2,3,4) for d in (3,10,17,24)]
         def rows(future):
             out=[]
@@ -952,7 +954,7 @@ class V443(Base):
             seen.append(out[0]['resolved_bounds'])
         self.assertEqual(seen[0],seen[1]);self.assertIsNotNone(seen[0])
     def test_mkt01_one_spot_source(self):
-        from prepare_research_cache import SPOT_SQL,DAILY_SQL,DAILY_RV_SQL
+        from nifty_iv.data.research_cache import SPOT_SQL,DAILY_SQL,DAILY_RV_SQL
         path="f.relative_path='india-index-options-1m/index/NIFTY.parquet'"
         for sql in (SPOT_SQL,DAILY_SQL,DAILY_RV_SQL):self.assertIn(path,sql)
     def test_risk01_force_exit_stress(self):
@@ -1015,7 +1017,7 @@ class V444(Base):
         d=self.make();c=config();e=self.cand(d,c);d.db.execute("DELETE FROM spot WHERE ts IN ('2026-01-09 15:29:00','2026-01-09 15:16:00')");d.db.commit();d2=Data(str(self.path));self.addCleanup(d2.close)
         m=[x for x in simulate(d2,c,e,'carry30','none','put')[0][1] if x['day']=='2026-01-09'];self.assertEqual(len(m),1);self.assertIn('SPOT_EOD_DAILY_CLOSE',m[0]['quality'])
     def test_stats05_rank_calendar_equals_simulator_calendar(self):
-        from rank_strategies import valuation_sessions
+        from nifty_iv.ivcal.rank_strategies import valuation_sessions
         d=self.make();self.assertEqual(valuation_sessions([dict(x) for x in d.daily.values()]),d.valuation_days)
     def test_cover03_audit_and_simulator_agree_on_size(self):
         d=self.make();
@@ -1046,8 +1048,8 @@ class V444(Base):
         led=r[0][0]['ledger'];paid=-sum(x.get('cash_flow',0.) for x in led if x['day']==e['day'] and x['event'] in ('initial_long','initial_short','gamma_reduction_option_buy'))-sum(x['hedge_cash'] for x in led if x['event']=='index_delta_proxy_open')
         self.assertAlmostEqual(r[0][0]['initial_debit_inr'],max(paid,c.min_debit),places=6)
     def test_prov04_calendar_files_are_hashed(self):
-        import lineage as L
-        src=Path(__file__).resolve().parents[1]/'calendar_research.py';t=src.read_text()
+        from nifty_iv.core import lineage as L
+        src=ROOT/'src'/'nifty_iv'/'ivcal'/'calendar_research.py';t=src.read_text()
         self.assertIn('special_sessions_sha256',t);self.assertIn('holiday_calendar_sha256',t)
         f=Path(tempfile.mkdtemp())/'s.txt';f.write_text('2026-01-09\n');a=L.file_digest(f);f.write_text('2026-01-10\n');self.assertNotEqual(a,L.file_digest(f))
     def test_recenter_is_all_or_none_without_a_short(self):
@@ -1066,17 +1068,17 @@ class V444(Base):
         p0=black_forward(f,k,t0,iv,'PE',r);p1=black_forward(f1,k,t1,iv1,'PE',r);a=attribute_leg(dict(price=p0,iv=iv,f=f,t=t0,r=r),p1,f1,iv1,t1,k,'PE',1)
         self.assertAlmostEqual(a['residual'],0.,places=8);self.assertAlmostEqual(sum(a.values()),p1-p0,places=8);self.assertGreater(abs(a['vanna_volga']),.5)
     def test_derived_signals(self):
-        from rank_strategies import ratio,SIGNALS,QUANTILE_SIGNALS
+        from nifty_iv.ivcal.rank_strategies import ratio,SIGNALS,QUANTILE_SIGNALS
         self.assertAlmostEqual(ratio(dict(iv5=.2,iv30=.2,iv90=.2),'annual_variance_curvature_5_30_90'),0.);self.assertGreater(ratio(dict(iv5=.2,iv30=.3,iv90=.2),'annual_variance_curvature_5_30_90'),0)
         self.assertIsNone(ratio(dict(iv5=None,iv30=.3,iv90=.2),'annual_variance_curvature_5_30_90'));self.assertAlmostEqual(ratio(dict(iv_to_rv_yz=1.5,forward_iv_ratio=1.25),'fwd_iv_to_rv_yz'),1.2)
         self.assertIn('annual_variance_curvature_5_30_90',SIGNALS);self.assertIn('fwd_iv_to_rv_yz',SIGNALS);self.assertIn('annual_variance_curvature_5_30_90',QUANTILE_SIGNALS)
     def test_plateau_neighbours(self):
-        from rank_strategies import plateau
+        from nifty_iv.ivcal.rank_strategies import plateau
         s={('iv_ratio',1.,1.5):2.,('iv_ratio',.8,1.5):1.,('iv_ratio',1.1,1.5):-1.,('iv_ratio',1.,2.):3.}
         got=plateau(('iv_ratio',1.,1.5),s,[.8,1.,1.1],[1.2,1.5,2.],[.5]);self.assertEqual(got['neighbours_scored'],3);self.assertEqual(got['median_sharpe'],1.);self.assertAlmostEqual(got['positive_share'],2/3)
         q=plateau(('skew_slope',.25,.75),{('skew_slope',0.,.75):1.},[],[],[.25,.5,.75]);self.assertEqual(q['neighbours_scored'],1)
     def test_shift_moves_whole_days(self):
-        from rank_strategies import circular_shift_control as f
+        from nifty_iv.ivcal.rank_strategies import circular_shift_control as f
         days=[f'2026-{1+i//28:02d}-{1+i%28:02d}' for i in range(40)];rows=[dict(id=f'{d}{k}',day=d,exit_day=d) for d in days for k in 'ab'];seen=[]
         class M:
             def evaluate(self,chosen,*a,**k):seen.append({x['day'] for x in chosen});return dict(sharpe=float(len(chosen)))
@@ -1084,7 +1086,7 @@ class V444(Base):
         out=f(rows,values,[(.5,2.)],M(),99,None,'base',None,1,5);self.assertEqual(out['shifts'],5)
         for got in seen:self.assertEqual(len(got),20)   # both rows of a day stay together; no day is split
     def test_bad_exercise_basis_refused(self):
-        from calendar_research import exercise_fee_count
+        from nifty_iv.ivcal.calendar_research import exercise_fee_count
         with self.assertRaises(ValueError):exercise_fee_count(65,65,SimpleNamespace(exercise_fee_basis='x'))
 
 class V445(Base):
@@ -1093,7 +1095,7 @@ class V445(Base):
     def aliases(self,**k):
         return config(round_steps=[100,500],strike_values=[0.],end='2026-01-09',**k)
     def test_can01_one_simulation_and_identical_results(self):
-        import calendar_research as C
+        from nifty_iv.ivcal import calendar_research as C
         d=self.make();c=self.aliases();cands=[x for x in generate(d,c,Counter()) if x['day']=='2026-01-07']
         self.assertEqual({x['strike_step'] for x in cands},{100,500});self.assertEqual(len({x['strike'] for x in cands}),1)
         calls=[];real=C.simulate
@@ -1107,17 +1109,17 @@ class V445(Base):
             direct=simulate(d,c,x,'weekly','none','put')[0]
             self.assertEqual(g[0][0],direct[0]);self.assertEqual(g[0][1],direct[1])
     def test_can01_failures_are_shared_and_labels_kept(self):
-        from calendar_research import simulate_once
+        from nifty_iv.ivcal.calendar_research import simulate_once
         d=self.make();c=self.aliases(min_debit=1e12);cands=[x for x in generate(d,c,Counter()) if x['day']=='2026-01-07'];memo={}
         self.assertEqual([simulate_once(memo,d,c,x,'weekly','none','put')[1:] for x in cands],[('nonpositive_debit',False),('nonpositive_debit',True)])
     def test_can02_double_uses_actual_wings(self):
-        from calendar_research import economic_key
+        from nifty_iv.ivcal.calendar_research import economic_key
         c=config(double_z=.75);base=dict(day='2026-01-07',short_expiry='2026-01-13',long_expiry='2026-04-28',qty=65,target_tenor=120,strike=25000.,short_f=25000.,iv_short=.2,long_strike=25000.)
         same=dict(base,strike=25100.);wide=dict(base,iv_short=.4)
         k=lambda x:economic_key(x,'weekly','none','double',c)
         self.assertEqual(k(base),k(same));self.assertNotEqual(k(base),k(wide));self.assertEqual(len(k(base)[5]),4)
     def test_can_key_keeps_what_changes_the_path(self):
-        from calendar_research import economic_key
+        from nifty_iv.ivcal.calendar_research import economic_key
         c=config();a=dict(day='d',short_expiry='s',long_expiry='l',qty=65,target_tenor=90,strike=25000.,long_strike=25000.);b=dict(a,target_tenor=120)
         self.assertEqual(economic_key(a,'weekly','none','put',c),economic_key(b,'weekly','none','put',c))
         self.assertNotEqual(economic_key(a,'rolling_recenter','none','put',c),economic_key(b,'rolling_recenter','none','put',c))
@@ -1139,13 +1141,13 @@ class V445(Base):
         rep,cm,t,meta,cfg,f=self.lineage_fixture('special_sessions_sha256','special_sessions');meta=dict(meta,special_sessions_sha256='')
         lineage.verify(rep,cm,t,meta,config={})
     def test_cli01_single_shift_is_deterministic(self):
-        from rank_strategies import circular_shift_control as f
+        from nifty_iv.ivcal.rank_strategies import circular_shift_control as f
         days=[f'2026-{1+i//28:02d}-{1+i%28:02d}' for i in range(24)];rows=[dict(id=d,day=d,exit_day=d) for d in days]
         class M:
             def evaluate(self,chosen,*a,**k):return dict(sharpe=float(len(chosen)))
         self.assertEqual(f(rows,[float(i) for i in range(24)],[(0.,20.)],M(),99,None,'base',None,1,1)['shifts'],1)
     def test_cli01_bad_ranking_arguments(self):
-        from rank_strategies import validate_args as v
+        from nifty_iv.ivcal.rank_strategies import validate_args as v
         ok=dict(max_open=3,folds=5,embargo_days=35,min_train=20,min_holdout=5,min_positive_folds=0,top=25,max_capital=0.,shift_control_max=200,bootstrap_reps=2000,bootstrap_block=10.,spa_max_models=20000,capital_multipliers='1,2')
         self.assertEqual(v(SimpleNamespace(**ok)),[])
         for k,x in (('shift_control_max',-1),('bootstrap_block',0.),('top',0),('folds',1),('capital_multipliers','1,0')):self.assertTrue(v(SimpleNamespace(**{**ok,k:x})),k)
@@ -1165,24 +1167,24 @@ class V445(Base):
         d=self.make();c=config(fill_sync='independent',fill_model='next_bar_open',entry_delay_minutes=2);e=self.cand(d,c)
         self.assertEqual({x[1] for x in execute_fills(d,c,e['day'],[(e['long_expiry'],e['strike'],'PE'),(e['short_expiry'],e['strike'],'PE')])},{'09:49'})
     def test_delay_setting_validated(self):
-        from calendar_research import validate_config as v
+        from nifty_iv.ivcal.calendar_research import validate_config as v
         self.assertTrue(v(SimpleNamespace(entry_delay_minutes=4,fill_model='next_bar_open',max_participation=.1)));self.assertTrue(v(SimpleNamespace(entry_delay_minutes=1,fill_model='next_minute',max_participation=.1)))
     def test_compare_book_stats(self):
-        from compare_fill_models import book_stats
+        from nifty_iv.ivcal.compare_fill_models import book_stats
         self.assertEqual(book_stats(dict(a=1.,b=-3.,c=1.))['max_drawdown'],3.)
     def test_prune_keeps_full_sort_order(self):
-        from rank_strategies import prune_finalists
+        from nifty_iv.ivcal.rank_strategies import prune_finalists
         items=[dict(score=s,train=dict(n=1),tag=i) for i,s in enumerate([1,3,3,2,3,0])];full=sorted(items,key=lambda x:(x['score'],x['train']['n']),reverse=True);some=list(items);prune_finalists(some,4)
         self.assertEqual([x['tag'] for x in some],[x['tag'] for x in full[:4]])
     def test_holdout_inspections_are_counted(self):
-        from rank_strategies import record_holdout_inspection as f
+        from nifty_iv.ivcal.rank_strategies import record_holdout_inspection as f
         t=Path(tempfile.mkdtemp())/'t.sqlite';self.assertEqual([f(t,'2026-01-01',None,{}),f(t,'2026-01-01',None,{}),f(t,'2025-06-01',None,{})],[0,1,0])
     def test_attribution_buckets_cover_the_pnl(self):
         d=self.make();c=config(brokerage=20.,gst=.18,slippage=.5,exercise_fee=20.,**self.causal);e=self.cand(d,c);r=simulate(d,c,e,'weekly','delta_entry_proxy','put')[0][0];a=r['pnl_attribution']
         self.assertAlmostEqual(sum(a.values()),r['pnl_inr'],places=6);self.assertLess(a['transaction_charges'],0);self.assertLess(a['slippage'],0)
         self.assertAlmostEqual(a['hedge_net'],sum(x.get('hedge_cash',0.) for x in r['ledger']))
     def test_liq01_stage_names_say_what_they_are(self):
-        import audit_contract_coverage as A
+        from nifty_iv.ivcal import audit_contract_coverage as A
         self.assertIn('any_independent_liquid_print',A.STAGES);self.assertIn('any_synchronous_liquid_print',A.STAGES);self.assertNotIn('same_minute_both',A.STAGES)
 
 class V450(Base):
@@ -1273,7 +1275,7 @@ class V451(Base):
         d=self.make();c=config(include_iron_fly=True,include_calendars=True,**self.fills);r=list(generate(d,c,Counter()))
         self.assertEqual(sum(bool(x.get('is_fly')) for x in r),sum(not x.get('is_fly') for x in r))
     def test_iron03_union_and_paired_are_distinct(self):
-        from compare_structures import compare
+        from nifty_iv.ivcal.compare_structures import compare
         v=lambda u:dict(unit=u,capital=u/10,unresolved=False,rows=1,strike_modes=['points'])
         k=lambda d:('p',d,'x',25000.,'none')
         out=compare({k('d1'):v(1.),k('d2'):v(3.)},{k('d2'):v(5.),k('d3'):v(9.)})
@@ -1320,11 +1322,11 @@ class V451(Base):
     def test_hold01_calendar_is_independent_of_trades(self):
         s=['2025-12-31','2026-01-01','2026-01-02'];self.assertEqual(fixed_holdout_days(s,'2026-01-01'),s[1:])
     def test_prev01_flat_sessions_count(self):
-        from compare_fill_models import book_stats
+        from nifty_iv.ivcal.compare_fill_models import book_stats
         loss={'d1':-50.,'d2':200.,'d3':-80.,'d4':160.,'d5':50.};cal=[f'd{i}' for i in range(1,12)]
         self.assertEqual(book_stats(loss,cal),book_stats({**loss,**{f'd{i}':0. for i in range(6,12)}}))
     def test_prev02_breakeven_is_quantity_weighted(self):
-        from compare_fill_models import breakeven_slippage
+        from nifty_iv.ivcal.compare_fill_models import breakeven_slippage
         self.assertEqual(breakeven_slippage(1300.,65.+65.+130.),5.)
     def test_prev03_freeze_binds_trades_settings_and_rules(self):
         short=[dict(key=('k',),signal='iv_ratio',rule_key=('iv_ratio',1.,2.),lower=1.,upper=2.)];a=freeze_payload(short,'h',dict(split='x',out='o1'))
@@ -1337,7 +1339,7 @@ class V451(Base):
 class V452(unittest.TestCase):
     """Acceptance tests named in the independent V4.5.1 review."""
     def db(self,rows):
-        from compare_structures import side
+        from nifty_iv.ivcal.compare_structures import side
         d=sqlite3.connect(':memory:');self.addCleanup(d.close)
         d.execute('CREATE TABLE trades(provider,day,structure,exit_policy,hedge,target_tenor,pnl_inr,lot_units,entry_capital_scenario,status,strike_mode,mtm_id,details)')
         for i,(st,pol,strike,pnl,status,*rest) in enumerate(rows):
@@ -1345,15 +1347,15 @@ class V452(unittest.TestCase):
             d.execute('INSERT INTO trades VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)',('p',day,st,pol,hedge,0 if st=='iron_fly' else 90,pnl,65,1e4,status,mode,f'm{i}',json.dumps(dict(short_expiry='2026-01-13',strike=strike))))
         return side(d,'iron_fly:tm1'),side(d,'put:tm1')
     def test_comp01_unresolved_stays_and_is_labelled(self):
-        from compare_structures import compare
+        from nifty_iv.ivcal.compare_structures import compare
         a,b=self.db([('iron_fly','tm1',25000.,70.,'closed_traded'),('iron_fly','tm1',25500.,-650.,'unresolved'),('put','tm1',25000.,40.,'closed_traded')])
         r=compare(a,b);self.assertEqual(r['universe_a']['all_opened']['per_unit']['n'],2);self.assertEqual(r['universe_a']['fully_observed_diagnostic']['per_unit']['n'],1);self.assertEqual(r['universe_a']['unresolved']['n'],1)
     def test_comp02_different_strikes_do_not_pair(self):
-        from compare_structures import compare
+        from nifty_iv.ivcal.compare_structures import compare
         r=compare(*self.db([('iron_fly','tm1',25000.,70.,'closed_traded'),('put','tm1',25500.,-50.,'closed_traded')]))
         self.assertEqual(r['paired_all_opened']['n'],0);self.assertEqual(r['unmatched_a'],{'other_strike_or_expiry_that_day':1})
     def test_comp03_same_short_strike_pairs_across_structures(self):
-        from compare_structures import compare
+        from nifty_iv.ivcal.compare_structures import compare
         r=compare(*self.db([('iron_fly','tm1',25000.,65.,'closed_traded'),('put','tm1',25000.,130.,'closed_traded')]));self.assertEqual(r['paired_all_opened']['a_minus_b_per_unit']['mean'],-1.)
     def test_comp04_hedged_rows_do_not_enter(self):
         a,b=self.db([('iron_fly','tm1',25000.,65.,'closed_traded'),('put','tm1',25000.,130.,'closed_traded','delta_entry_proxy')]);self.assertEqual(len(a),1);self.assertEqual(len(b),0)
@@ -1370,7 +1372,7 @@ class V452(unittest.TestCase):
         for known,gone,blocked in (('2026-01-07 08:00','9999-12-31 00:00',True),('2026-01-07 16:00','9999-12-31 00:00',False),('2026-01-01 08:00','2026-01-05 08:00',False)):
             d.events=[('2026-01-08',known,gone)];self.assertEqual(list(generate(d,c,Counter()))==[],blocked,known)
     def test_fill01_window_ignores_other_runs(self):
-        from compare_fill_models import compare
+        from nifty_iv.ivcal.compare_fill_models import compare
         t=Path(tempfile.mkdtemp());days=[f'2026-01-{i:02d}' for i in range(1,21)]
         def make(name,pairs):
             db=sqlite3.connect(t/name);db.executescript('CREATE TABLE trades(id,economic_id,pnl_inr,lot_units,status);CREATE TABLE fills(trade_id,seq,details);CREATE TABLE marks(trade_id,day,pnl_inr);')
@@ -1395,7 +1397,7 @@ class V453(unittest.TestCase):
     def test_boundary05_train_only_report_ignores_every_later_outcome(self):
         import subprocess,shutil
         root=Path(tempfile.mkdtemp());cache=root/'c.sqlite';fixture(cache,long=dt.date(2026,6,30),end=dt.date(2026,6,30));here=Path(__file__).resolve().parents[1]
-        run=lambda *a:subprocess.run([sys.executable,str(here/a[0]),*map(str,a[1:])],check=True,capture_output=True,cwd=root)
+        run=lambda *a:subprocess.run([*mod(a[0]),*map(str,a[1:])],check=True,capture_output=True,cwd=root,env=ENV)
         run('enrich_cache.py','--cache',cache,'--batch-rows',8000)
         run('calendar_research.py','--cache',cache,'--out',root/'a.sqlite','--from-date','2026-01-07','--to-date','2026-04-15','--long-tenors','120','--tenor-tolerance','60','--round-steps','500','--strike-values','0','--policies','weekly,rolling_static','--structures','put','--max-candidates','75','--slippage-mode','flat')
         shutil.copy(root/'a.sqlite',root/'b.sqlite');cut='2026-03-16'
@@ -1475,16 +1477,16 @@ class V454(Base):
             db.execute('INSERT INTO trades VALUES(?,?,?,?,?,?,?,?)',(str(i),sched,60,'closed_traded',sched,pnl,65,json.dumps(dict(short_expiry=exp,exit_reason=why))));db.execute('INSERT INTO marks VALUES(?,?,?)',(str(i),sched,mark))
         db.commit();db.close();return path
     def test_report_stops_at_the_cutoff(self):
-        from exit_lag_report import load,report
+        from nifty_iv.ivcal.exit_lag_report import load,report
         base=[('2025-08-05','2025-08-07',650.,'weekly_exit',650.),('2025-08-12','2025-08-14',-650.,'weekly_exit',-650.)]
         a=report(load(self.report_db(base),'2025-11-27'))
         self.assertEqual(a,report(load(self.report_db(base+[('2026-02-03','2026-02-03',-9e9,'weekly_exit',-9e9)]),'2025-11-27')))
     def test_report_eras_use_short_expiry(self):
-        from exit_lag_report import load,report
+        from nifty_iv.ivcal.exit_lag_report import load,report
         b=report(load(self.report_db([('2025-08-28','2025-09-02',65.,'weekly_exit',65.)]),'2025-11-27'))['60']
         self.assertEqual(b['tuesday_era']['trades'],1);self.assertEqual(b['thursday_era']['trades'],0)
     def test_report_separates_drift(self):
-        from exit_lag_report import load,report
+        from nifty_iv.ivcal.exit_lag_report import load,report
         b=report(load(self.report_db([('2025-08-05','2025-08-07',130.,'late_liquid_exit',65.)]),'2025-11-27'))['60']['all']
         self.assertAlmostEqual(b['post_schedule_drift'],1.);self.assertEqual(b['lagged'],1)
 
@@ -1494,7 +1496,7 @@ class Plumbing(unittest.TestCase):
         db.execute('INSERT INTO t VALUES(?,?)',(num(decimal.Decimal('1.5')),whole(decimal.Decimal(7))))
         self.assertEqual(db.execute('SELECT * FROM t').fetchone(),(1.5,7));self.assertIsNone(num(None))
     def test_publish_on_conflict_names_a_target(self):
-        src=(Path(__file__).resolve().parents[1]/'publish_results.py').read_text()
+        src=(ROOT/'src'/'nifty_iv'/'ivcal'/'publish_results.py').read_text()
         self.assertNotIn('ON CONFLICT DO UPDATE',src)
     def test_daily_sql_keeps_single_source_file(self):
         self.assertIn("f.relative_path='india-index-options-1m/index/NIFTY.parquet'",DAILY_SQL)

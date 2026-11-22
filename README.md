@@ -2,7 +2,7 @@
 
 **A research system for testing whether a trend-and-swing signal on the NIFTY index can be turned into option-selling strategies, using real minute-by-minute option prices.**
 
-> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.11-research` (see `VERSION.txt` and `CODEMAP_V4_9_11.md`), and 601 synthetic tests pass.
+> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.11-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_11.md`), and 602 synthetic tests pass.
 
 ---
 
@@ -78,25 +78,25 @@ flowchart LR
     subgraph SRC["Market data (read-only)"]
         PQ[("NIFTY_Data/<br/>Parquet 1-min<br/>options + spot")]
         PG[("PostgreSQL<br/>market_data.option_bars<br/>market_data.spot_bars<br/>market_data.import_files")]
-        PQ -- import_nifty_postgres.py --> PG
+        PQ -- data/import_postgres.py --> PG
     end
 
     subgraph ZP["Zone pipeline (active)"]
-        SPOT["zone_spot.py"] --> SS[("zone_spot.sqlite")]
-        SS --> SIG["zone_signals.py<br/>INDEX v15 port"]
-        SIG --> CON["zone_contracts.py<br/>plan + extract"]
+        SPOT["zone/spot.py"] --> SS[("zone_spot.sqlite")]
+        SS --> SIG["zone/signals.py<br/>INDEX v15 port"]
+        SIG --> CON["zone/contracts.py<br/>plan + extract"]
         CON --> OPT[("zone_options_levels.sqlite")]
-        OPT --> PATHS["zone_paths.py<br/>PathSim"]
+        OPT --> PATHS["zone/paths.py<br/>PathSim"]
         SS --> PATHS
         PATHS --> PDB[("zone_paths_levels.sqlite")]
-        PDB --> GRID["zone_grid.py<br/>+ zone_rules.py"]
+        PDB --> GRID["zone/grid.py<br/>+ zone/rules.py"]
         GRID --> NPZ[("grid_*.npz")]
-        NPZ --> PORT["zone_portfolio.py"]
+        NPZ --> PORT["zone/portfolio.py"]
         PORT --> FRZ[/"portfolio_freeze.json"/]
-        FRZ --> HOLD["zone_holdout.py"]
+        FRZ --> HOLD["zone/holdout.py"]
     end
 
-    SPEC{{"strategy_spec.py<br/>margin table · strikes · expiries"}}
+    SPEC{{"core/strategy_spec.py<br/>margin table · strikes · expiries"}}
     SPEC -.-> CON
     SPEC -.-> PATHS
     SPEC -.-> PORT
@@ -107,7 +107,7 @@ flowchart LR
     PDB --> DIAG["Diagnostics<br/>strategy_scan · dd_cutoffs<br/>pair_exits · zone_diagnose"]
 ```
 
-The indicator itself is in `INDEX_v15_zone_swing.pine` (with a copy in `PineScript/`). `zone_signals.py` is a bar-for-bar Python port of it.
+The indicator itself is in `pine/INDEX_v15_zone_swing.pine`. `zone/signals.py` is a bar-for-bar Python port of it.
 
 ---
 
@@ -217,7 +217,7 @@ Every decision is made **at bar close**. Nothing that prints later can gate or p
 
 ## 4. From signal to trade
 
-### 4.1 Direction, strike and expiry (`strategy_spec.py`)
+### 4.1 Direction, strike and expiry (`core/strategy_spec.py`)
 
 | Zone | Side | Sells | Strike |
 |---|---|---|---|
@@ -257,7 +257,7 @@ flowchart LR
 
 Margin is charged **per unit**, so a contract trading with a different lot size during a transition window is charged in proportion to its own lot. The table covers 2004 to 2026 and is meant to be extended as new data arrives.
 
-### 4.3 Life of one simulated position (`zone_paths.py`, `PathSim`)
+### 4.3 Life of one simulated position (`zone/paths.py`, `PathSim`)
 
 ```mermaid
 sequenceDiagram
@@ -298,14 +298,14 @@ A path is simulated **once per (signal bar × side × structure × level)** and 
 
 ```mermaid
 flowchart TB
-    A["① zone_spot.py<br/>spot_1m from 2020 (EMA warm-up)"] --> B
-    B["② zone_signals.py<br/>zones + 1,445 configs → entries"] --> C
-    C["③ zone_contracts.py<br/>plan contracts on a 'liquid at ₹1' PlanMarket,<br/>then extract only those contract-days (resumable by month)"] --> D
-    D["④ zone_paths.py<br/>PathSim: fills, marks, exit cash per bar"] --> E
-    E["⑤ zone_coverage.py<br/>classify every data gap"] --> F
-    F["⑥ zone_rules.py + zone_grid.py<br/>evaluate every stop × profit rule,<br/>sequence one position at a time"] --> G
-    G["⑦ zone_portfolio.py<br/>pools → green×red pairs → executable account"] --> H
-    H["⑧ zone_holdout.py<br/>replay the freeze once on 2025-01 … 2026-07"]
+    A["① zone/spot.py<br/>spot_1m from 2020 (EMA warm-up)"] --> B
+    B["② zone/signals.py<br/>zones + 1,445 configs → entries"] --> C
+    C["③ zone/contracts.py<br/>plan contracts on a 'liquid at ₹1' PlanMarket,<br/>then extract only those contract-days (resumable by month)"] --> D
+    D["④ zone/paths.py<br/>PathSim: fills, marks, exit cash per bar"] --> E
+    E["⑤ zone/coverage.py<br/>classify every data gap"] --> F
+    F["⑥ zone/rules.py + zone/grid.py<br/>evaluate every stop × profit rule,<br/>sequence one position at a time"] --> G
+    G["⑦ zone/portfolio.py<br/>pools → green×red pairs → executable account"] --> H
+    H["⑧ zone/holdout.py<br/>replay the freeze once on 2025-01 … 2026-07"]
 
     style C fill:#eef,stroke:#88a
     style D fill:#eef,stroke:#88a
@@ -314,7 +314,7 @@ flowchart TB
     style H fill:#fee,stroke:#a88
 ```
 
-### Exit rule families (`zone_rules.py`)
+### Exit rule families (`zone/rules.py`)
 
 Each structure has about **1,000–1,250 stop rules** and **34–50 profit rules**:
 
@@ -367,7 +367,7 @@ flowchart TB
     ACC --> ROB["robust neighbours"]
     ROB --> WF{"walk-forward<br/>needs 3 full training years"}
     WF --> FREEZE[/"portfolio_freeze.json<br/>(code + paths digests)"/]
-    FREEZE --> HO["zone_holdout.py<br/>one replay, ledgered"]
+    FREEZE --> HO["zone/holdout.py<br/>one replay, ledgered"]
 ```
 
 Supporting checks:
@@ -429,48 +429,49 @@ timeline
 ### Install and verify
 
 ```bash
-python -m pip install -r requirements.txt     # numpy, scipy, psycopg[binary]; numba optional
-python -m pytest tests/                        # 601 synthetic tests
-sha256sum -c SHA256SUMS.txt
+python -m pip install -e ".[fast,test]"     # package + console scripts; numba (fast) optional
+python -m pytest                             # 602 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
 
 export PGHOST=localhost PGPORT=5432 PGDATABASE=nifty_data PGUSER=postgres
 read -rs -p 'PostgreSQL password: ' PGPASSWORD; echo; export PGPASSWORD
 ```
 
+Every tool is a console script (`nifty-zone-*`, `nifty-diag-*`, `nifty-data-*`, `nifty-iv-*`) and also runs as `python -m nifty_iv.<subpackage>.<module>`. Run from `runs/` (ignored by git) so outputs stay out of the source tree. The Parquet importer reads `data/NIFTY_Data/` unless `NIFTY_DATA_ROOT` is set.
+
 ### Zone pipeline (V4.9.7+ levels study)
 
 ```bash
-set -o pipefail
-python zone_spot.py      --from-date 2020-01-01 --to-date 2026-07-01 --out zone_spot.sqlite
-python zone_signals.py   --spot zone_spot.sqlite --split 2025-01-01 --out zone_signals.json
-python zone_contracts.py --spot zone_spot.sqlite --offset-mode levels \
+set -o pipefail; cd runs
+nifty-zone-spot      --from-date 2020-01-01 --to-date 2026-07-01 --out zone_spot.sqlite
+nifty-zone-signals   --spot zone_spot.sqlite --split 2025-01-01 --out zone_signals.json
+nifty-zone-contracts --spot zone_spot.sqlite --offset-mode levels \
     --structures naked,naked_m1,naked_m2,calendar --out zone_options_levels.sqlite
-python zone_paths.py     --options zone_options_levels.sqlite --spot zone_spot.sqlite --offset-mode levels \
+nifty-zone-paths     --options zone_options_levels.sqlite --spot zone_spot.sqlite --offset-mode levels \
     --structures naked,naked_m1,naked_m2,calendar,futures_zone,futures_expiry \
     --target-margin 2500000 --out zone_paths_levels.sqlite
-python zone_coverage.py  --options zone_options_levels.sqlite --paths zone_paths_levels.sqlite --out coverage_paths
-python zone_grid.py      --paths zone_paths_levels.sqlite --holidays nse_holidays.txt --workers 4 --out zone_grid_levels
-python zone_portfolio.py --grid zone_grid_levels --paths zone_paths_levels.sqlite \
-    --holidays nse_holidays.txt --workers 4 --out portfolio_levels
+nifty-zone-coverage  --options zone_options_levels.sqlite --paths zone_paths_levels.sqlite --out coverage_paths
+nifty-zone-grid      --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt --workers 4 --out zone_grid_levels
+nifty-zone-portfolio --grid zone_grid_levels --paths zone_paths_levels.sqlite \
+    --holidays ../config/nse_holidays.txt --workers 4 --out portfolio_levels
 ```
 
 ### Diagnostics on the paths file
 
 ```bash
-python strategy_scan.py --paths zone_paths_levels.sqlite --holidays nse_holidays.txt \
+nifty-diag-strategy-scan --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt \
     --min-mean 0.13 --min-year 0.10 --max-trade-dd 0.03 --judge-years 2022,2023,2024 --out strategy_scan.csv
-python dd_cutoffs.py    --paths zone_paths_levels.sqlite        # touches the 2025–26 period
+nifty-diag-dd-cutoffs    --paths zone_paths_levels.sqlite        # touches the 2025–26 period
 ```
 
 ### Holdout (once, when selection is final)
 
 ```bash
-python zone_holdout.py --freeze portfolio_levels/portfolio_freeze.json --paths zone_paths_levels.sqlite
+nifty-zone-holdout --freeze portfolio_levels/portfolio_freeze.json --paths zone_paths_levels.sqlite
 ```
 
 **Resources.** The grid takes hours and tens of GB, and each worker needs 1–3 GB of RAM (use `--workers 2` on a 16 GB machine). `--resume` re-hashes finished files and continues from where it stopped. Setting `ZONE_NO_NUMBA=1` disables numba, with identical results.
 
-For the full, version-by-version option reference, see `README_V4.md` and the `V4_9_*_NOTES.md` files.
+The version-by-version option reference is `docs/guides/README_V4.md` plus `docs/notes/`. Those files use the old flat script names; `docs/MODULE_MAP.md` translates them.
 
 ---
 
@@ -478,59 +479,53 @@ For the full, version-by-version option reference, see `README_V4.md` and the `V
 
 ```mermaid
 flowchart LR
-    subgraph ACTIVE["Zone pipeline"]
+    subgraph PKG["src/nifty_iv"]
         direction TB
-        a1[zone_spot.py]
-        a2[zone_signals.py]
-        a3[zone_contracts.py]
-        a4[zone_paths.py]
-        a5[zone_coverage.py]
-        a6[zone_rules.py]
-        a7[zone_grid.py]
-        a8[zone_portfolio.py]
-        a9[zone_holdout.py]
-        a10[strategy_spec.py]
+        subgraph CORE["core"]
+            c1[strategy_spec · contract_specs · lineage]
+        end
+        subgraph DATA["data"]
+            d1[import_postgres · inspect_parquet]
+            d2[research_cache · migrate · explain_month]
+        end
+        subgraph ZONE["zone"]
+            z1[spot · signals · contracts · backtest]
+            z2[paths · coverage · rules · grid]
+            z3[portfolio · holdout]
+            z4[legacy: futures · report · summary]
+        end
+        subgraph DIAG["diagnostics"]
+            g1[strategy_scan · dd_cutoffs · dd_bins · dd_recovery]
+            g2[zone_diagnose · pair_exits]
+        end
+        subgraph IV["ivcal (dormant pipeline)"]
+            i1[quant_v2/v3/fast_v3 · candidate_core · settlements · stats]
+            i2[calendar_research · enrich_cache · rank_strategies · publish_results]
+            i3[audit_* · calibrate_* · compare_* · power_analysis · reports]
+        end
     end
-    subgraph DIAG["Diagnostics"]
-        direction TB
-        d1[strategy_scan.py]
-        d2[dd_cutoffs.py · dd_bins.py · dd_recovery.py]
-        d3[zone_diagnose.py]
-        d4[pair_exits.py]
-    end
-    subgraph LEG["Legacy zone tools"]
-        direction TB
-        l1[zone_backtest.py — Sim, Market]
-        l2[zone_futures.py · zone_report.py · zone_summary.py]
-    end
-    subgraph IV["Relative-IV pipeline (dormant)"]
-        direction TB
-        i1[prepare_research_cache.py]
-        i2[enrich_cache.py · quant_v2/v3/fast_v3]
-        i3[calendar_research.py]
-        i4[rank_strategies.py · stats_v4.py]
-        i5[publish_results.py · lineage.py]
-        i6[audit_* · calibrate_* · power_analysis.py · compare_*]
-    end
-    subgraph INFRA["Infra"]
-        direction TB
-        f1[import_nifty_postgres.py]
-        f2[migrate_research.py · migrations/]
-        f3[tests/ · smoke_v3.py]
-        f4[PineScript/ · INDEX_v15_zone_swing.pine]
-    end
-    a4 -. imports fill_detail / hedge_cost .-> i3
-    a3 -. uses Market / Sim .-> l1
+    ZONE --> CORE
+    ZONE -. spot/listing SQL .-> DATA
+    ZONE -. fill_detail / hedge_cost .-> IV
+    DIAG --> ZONE
+    IV --> CORE
+    IV --> DATA
 ```
 
 | Path | Contents |
 |---|---|
-| `NIFTY_Data/` | source Parquet (1-minute index options and spot) |
-| `tests/` | `test_zone.py`, `test_paths.py`, `test_v3.py`, `test_v4.py` |
-| `V4_*_NOTES.md`, `VALIDATION_V4_*.md` | per-release change notes and synthetic validation |
-| `CODEMAP_V4_9_11.md` | short code map and current research state |
-| `NIFTY_IV_RESEARCH_V*.zip` | release snapshots |
-| `legacy_v1/`, `archive/` | superseded code |
+| `src/nifty_iv/` | the package (layout above); `VERSION.txt` is the release string written into run metadata |
+| `src/nifty_iv/data/migrations/` | PostgreSQL schema migrations (`research_v3`) |
+| `tests/` | `test_zone.py`, `test_paths.py`, `test_v3.py`, `test_v4.py` (synthetic only) |
+| `config/` | inputs: `nse_holidays.txt` |
+| `pine/` | `INDEX_v15_zone_swing.pine` (TradingView source of the signal) |
+| `scripts/` | `smoke_v3.py` (synthetic IV-pipeline run), `check_import_psql.sh`, `cleanup_outputs.sh` |
+| `docs/` | `guides/` (install, import, V2/V4 guides) · `notes/` (V4.x release notes) · `validation/` · `research/` (reviews, pilot results) · `CHANGES_V4.md` · `CODEMAP_V4_9_11.md` · `MODULE_MAP.md` |
+| `data/` | not tracked: Parquet tree (`data/NIFTY_Data`) |
+| `runs/` | not tracked: every run output |
+| `archive/` | superseded code (`legacy_v1/`, `v2_tools/`, `scripts/`) |
+
+Release zips are no longer committed. Every earlier snapshot remains in git history (commits before the reorganisation).
 
 ---
 
@@ -540,15 +535,15 @@ The project began as a study of **NIFTY put calendars timed by relative implied 
 
 ```mermaid
 flowchart LR
-    PG[(market_data)] --> PRC[prepare_research_cache.py] --> C[(research_cache.sqlite)]
-    C --> EN["enrich_cache.py<br/>Greeks / IV<br/>(quant_v2, v3, fast)"] --> C
+    PG[(market_data)] --> PRC[data/research_cache.py] --> C[(research_cache.sqlite)]
+    C --> EN["ivcal/enrich_cache.py<br/>Greeks / IV<br/>(quant_v2, v3, fast)"] --> C
     C --> AUD["audit_quality<br/>audit_contract_coverage<br/>audit_spot_sources"]
-    C --> CR["calendar_research.py<br/>simulator"] --> T[(trades.sqlite)]
-    T --> RS["rank_strategies.py<br/>nested walk-forward · SPA (stats_v4)<br/>circular-shift control"] --> RJ[/rankings.json/]
-    RJ --> PUB["publish_results.py · lineage.py"]
+    C --> CR["ivcal/calendar_research.py<br/>simulator"] --> T[(trades.sqlite)]
+    T --> RS["ivcal/rank_strategies.py<br/>nested walk-forward · SPA (stats_v4)<br/>circular-shift control"] --> RJ[/rankings.json/]
+    RJ --> PUB["ivcal/publish_results.py · core/lineage.py"]
 ```
 
-Its fill and hedge-cost functions (`fill_detail`, `hedge_cost`) are reused by `zone_paths.py`.
+Its fill and hedge-cost functions (`fill_detail`, `hedge_cost`) are reused by `zone/paths.py`.
 
 ---
 

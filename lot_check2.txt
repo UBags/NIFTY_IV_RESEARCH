@@ -1,3 +1,0 @@
-in-tenor month-expiry cells 236 rows 2631526 non-multiple rows 0 no_rule rows 104
-2024-11 | 2025-03-27 | no_rule | 32 | 27
-2024-12 | 2025-03-27 | no_rule | 72 | 174

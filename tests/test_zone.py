@@ -2,14 +2,14 @@
 import sys,unittest,tempfile,sqlite3,math,json,datetime as dt,random,os
 from pathlib import Path
 from types import SimpleNamespace
-sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
+sys.path[:0]=[str(Path(__file__).resolve().parents[1]/"src"),str(Path(__file__).resolve().parents[1])]
 os.environ.setdefault('NIFTY_HOLDOUT_LOG',str(Path(tempfile.mkdtemp())/'log.jsonl'))
 import numpy as np
-import zone_signals as zs
-import zone_backtest as zb
-import zone_report as zr
-from prepare_research_cache import DDL
-from quant_v3 import black_forward
+from nifty_iv.zone import signals as zs
+from nifty_iv.zone import backtest as zb
+from nifty_iv.zone.legacy import report as zr
+from nifty_iv.data.research_cache import DDL
+from nifty_iv.ivcal.quant_v3 import black_forward
 
 def sessions(start,n):
     d=dt.date.fromisoformat(start);out=[]
@@ -117,7 +117,7 @@ class Market(unittest.TestCase):
         self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup)
         days=days or sessions('2024-01-02',8);level=level or (lambda d,m:20000.);self.days=days
         op=Path(self.tmp.name)/'o.sqlite';sp=Path(self.tmp.name)/'s.sqlite'
-        import zone_contracts as zc
+        from nifty_iv.zone import contracts as zc
         db=sqlite3.connect(op);db.executescript(zc.DDL);s=sqlite3.connect(sp)
         s.execute('CREATE TABLE spot_1m(day TEXT,minute TEXT,open REAL,high REAL,low REAL,close REAL,PRIMARY KEY(day,minute))')
         rows=[];listing=[]
@@ -219,7 +219,7 @@ class LagCap(Market):
 
 class Plan(Market):
     def test_plan_covers_every_contract_day_a_real_run_uses(self):
-        import zone_contracts as zc
+        from nifty_iv.zone import contracts as zc
         days=sessions('2024-01-02',12);lv=lambda d,mm:20000.+(80. if d>=days[3] else 0.)
         m=self.build(days=days,level=lv,extra=('2024-01-18',));bars=self.bars_for(days,lv);final=['G']*40+['R']*(len(bars)-40)
         sig={'c':{'bull':[0,10,20],'bear':[45]}}
@@ -293,7 +293,7 @@ class AtrStop(Market):
 
 class FuturesBench(unittest.TestCase):
     def setUp(self):
-        import zone_futures as zf;self.zf=zf
+        from nifty_iv.zone.legacy import futures as zf;self.zf=zf
         self.days=sessions('2024-01-02',10);self.m=walk(self.days,drift=.3)
         self.bars=zs.aggregate(self.m,45);self.listing={d:{'2024-01-11','2024-01-18'} for d in self.days}
     def cfg(self,**kw):
@@ -324,12 +324,12 @@ class Boundaries(unittest.TestCase):
         return [zs.Bar('2024-12-31',870,915,20000,20005,19995,20000),zs.Bar('2024-12-31',915,930,20000,20005,19995,20000),zs.Bar('2025-01-02',555,600,20100,20115,20080,20110)]
     def fcfg(self):return SimpleNamespace(contract_master=None,slippage_points=1.,lots=1,brokerage=20.,gst=.18,hedge_bps=0.,hedge_statutory=True,atr_mult=1.,min_short_days=4)
     def test_futures_exit_filled_next_session_still_valued_at_cutoff(self):
-        import zone_futures as zf
+        from nifty_iv.zone.legacy import futures as zf
         minutes={'2024-12-31':[(915,20000,20000,20000,20000)],'2025-01-02':[(555,20100,20100,20100,20100)]}
         p=zf.Futures(self.bars(),['G','R','R'],minutes,{},self.fcfg(),boundaries=['2025-01-01']).run({0:['bull']},('futures_zone',),(None,))[0]
         self.assertEqual((p['entry_day'],p['exit_day']),('2024-12-31','2025-01-02'));self.assertIn('2025-01-01',p['marks_at'])
     def test_no_mark_before_a_position_exists(self):
-        import zone_futures as zf
+        from nifty_iv.zone.legacy import futures as zf
         minutes={'2024-12-31':[(915,20000,20000,20000,20000)],'2025-01-02':[(555,20100,20100,20100,20100)]}
         p=zf.Futures(self.bars()[1:],['G','G'],minutes,{},self.fcfg(),boundaries=['2025-01-01']).run({0:['bull']},('futures_zone',),(None,))[0]
         self.assertEqual(p['entry_day'],'2025-01-02');self.assertNotIn('2025-01-01',p['marks_at'])
@@ -346,6 +346,13 @@ class Options(unittest.TestCase):
         self.assertEqual(zb.parse_offsets('-400,-300,0,300,400'),(-400,-300,0,300,400))
         self.assertEqual(zb.parse_tps('none,.3,.35,0.45'),(None,.3,.35,.45));self.assertEqual(zb.parse_stops('none,15,30'),(None,15,30))
     def test_summary_periods(self):
-        import zone_summary as s
+        from nifty_iv.zone.legacy import summary as s
         self.assertEqual(s.periods('2021-06-01','2023-01-01'),[('2021-06-01','2022-06-01'),('2022-06-01','2023-01-01')])
 if __name__=='__main__':unittest.main()
+
+class PackageLayout(unittest.TestCase):
+    """The reorganised package: one release string, the PEP 440 version in pyproject.toml derived from it."""
+    def test_pyproject_version_matches_release(self):
+        import re,nifty_iv
+        v=re.search(r'^version = "([^"]+)"',(Path(__file__).resolve().parents[1]/'pyproject.toml').read_text(),re.M).group(1)
+        self.assertEqual(v,nifty_iv.__version__.replace('-','+',1))
