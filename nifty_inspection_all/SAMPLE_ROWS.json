@@ -1,0 +1,1006 @@
+[
+  {
+    "relative_path": "NIFTY.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "symbol",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-05-24T09:07:00+05:30",
+          "trading_day": "2021-05-24",
+          "symbol": "NIFTY",
+          "open": 15211.35,
+          "high": 15211.35,
+          "low": 15211.35,
+          "close": 15211.35,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-05-24T09:15:00+05:30",
+          "trading_day": "2021-05-24",
+          "symbol": "NIFTY",
+          "open": 15221.65,
+          "high": 15233.3,
+          "low": 15193.45,
+          "close": 15227.45,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 31,
+        "values": {
+          "timestamp": "2023-12-01T09:15:00+05:30",
+          "trading_day": "2023-12-01",
+          "symbol": "NIFTY",
+          "open": 20183.7,
+          "high": 20218.8,
+          "low": 20183.7,
+          "close": 20208.75,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 31,
+        "values": {
+          "timestamp": "2023-12-01T09:16:00+05:30",
+          "trading_day": "2023-12-01",
+          "symbol": "NIFTY",
+          "open": 20212.45,
+          "high": 20212.45,
+          "low": 20199.7,
+          "close": 20209.0,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 62,
+        "values": {
+          "timestamp": "2026-07-01T09:00:00+05:30",
+          "trading_day": "2026-07-01",
+          "symbol": "NIFTY",
+          "open": 23865.75,
+          "high": 24189.0,
+          "low": 23865.75,
+          "close": 23992.2,
+          "volume": 0
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/index/BANKNIFTY.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "symbol",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-05-27T09:15:00+05:30",
+          "trading_day": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "open": 34732.2,
+          "high": 34756.6,
+          "low": 34650.65,
+          "close": 34691.3,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-05-27T09:16:00+05:30",
+          "trading_day": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "open": 34685.25,
+          "high": 34685.25,
+          "low": 34640.05,
+          "close": 34674.9,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 31,
+        "values": {
+          "timestamp": "2023-12-01T09:15:00+05:30",
+          "trading_day": "2023-12-01",
+          "symbol": "BANKNIFTY",
+          "open": 44581.25,
+          "high": 44609.4,
+          "low": 44531.75,
+          "close": 44570.05,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 31,
+        "values": {
+          "timestamp": "2023-12-01T09:16:00+05:30",
+          "trading_day": "2023-12-01",
+          "symbol": "BANKNIFTY",
+          "open": 44564.2,
+          "high": 44590.95,
+          "low": 44545.25,
+          "close": 44589.55,
+          "volume": 0
+        }
+      },
+      {
+        "row_group": 62,
+        "values": {
+          "timestamp": "2026-07-01T09:00:00+05:30",
+          "trading_day": "2026-07-01",
+          "symbol": "BANKNIFTY",
+          "open": 57542.9,
+          "high": 57542.9,
+          "low": 57542.9,
+          "close": 57542.9,
+          "volume": 0
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "NIFTY_2024.parquet",
+    "selected_columns": [
+      "timestamp",
+      "date",
+      "expiry",
+      "underlying",
+      "strike",
+      "option_type",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "oi",
+      "source",
+      "granularity"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2024-11-21T15:29:00+05:30",
+          "date": "2024-11-21",
+          "expiry": "2024-11-21",
+          "underlying": "NIFTY",
+          "strike": 22800.0,
+          "option_type": "CE",
+          "open": 549.45,
+          "high": 549.45,
+          "low": 549.4,
+          "close": 549.4,
+          "volume": 425,
+          "oi": 12475,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2024-11-21T15:28:00+05:30",
+          "date": "2024-11-21",
+          "expiry": "2024-11-21",
+          "underlying": "NIFTY",
+          "strike": 22800.0,
+          "option_type": "CE",
+          "open": 550.0,
+          "high": 550.0,
+          "low": 549.85,
+          "close": 549.85,
+          "volume": 325,
+          "oi": 12475,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 7,
+        "values": {
+          "timestamp": "2024-12-09T13:51:00+05:30",
+          "date": "2024-12-09",
+          "expiry": "2025-01-02",
+          "underlying": "NIFTY",
+          "strike": 24650.0,
+          "option_type": "CE",
+          "open": 425.0,
+          "high": 425.0,
+          "low": 425.0,
+          "close": 425.0,
+          "volume": 0,
+          "oi": 0,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 7,
+        "values": {
+          "timestamp": "2024-12-09T13:50:00+05:30",
+          "date": "2024-12-09",
+          "expiry": "2025-01-02",
+          "underlying": "NIFTY",
+          "strike": 24650.0,
+          "option_type": "CE",
+          "open": 425.0,
+          "high": 425.0,
+          "low": 425.0,
+          "close": 425.0,
+          "volume": 0,
+          "oi": 0,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 13,
+        "values": {
+          "timestamp": "2024-11-13T12:53:00+05:30",
+          "date": "2024-11-13",
+          "expiry": "2024-11-28",
+          "underlying": "NIFTY",
+          "strike": 27300.0,
+          "option_type": "CE",
+          "open": 4.0,
+          "high": 4.0,
+          "low": 4.0,
+          "close": 4.0,
+          "volume": 0,
+          "oi": 0,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "NIFTY_2025.parquet",
+    "selected_columns": [
+      "timestamp",
+      "date",
+      "expiry",
+      "underlying",
+      "strike",
+      "option_type",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "oi",
+      "source",
+      "granularity"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2025-01-23T15:29:00+05:30",
+          "date": "2025-01-23",
+          "expiry": "2025-01-23",
+          "underlying": "NIFTY",
+          "strike": 22550.0,
+          "option_type": "PE",
+          "open": 0.05,
+          "high": 0.1,
+          "low": 0.05,
+          "close": 0.05,
+          "volume": 115200,
+          "oi": 5163525,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2025-01-23T15:28:00+05:30",
+          "date": "2025-01-23",
+          "expiry": "2025-01-23",
+          "underlying": "NIFTY",
+          "strike": 22550.0,
+          "option_type": "PE",
+          "open": 0.1,
+          "high": 0.1,
+          "low": 0.05,
+          "close": 0.1,
+          "volume": 113625,
+          "oi": 5352525,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 33,
+        "values": {
+          "timestamp": "2025-03-19T13:42:00+05:30",
+          "date": "2025-03-19",
+          "expiry": "2025-05-29",
+          "underlying": "NIFTY",
+          "strike": 21100.0,
+          "option_type": "PE",
+          "open": 60.0,
+          "high": 60.0,
+          "low": 60.0,
+          "close": 60.0,
+          "volume": 0,
+          "oi": 37500,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 33,
+        "values": {
+          "timestamp": "2025-03-19T13:41:00+05:30",
+          "date": "2025-03-19",
+          "expiry": "2025-05-29",
+          "underlying": "NIFTY",
+          "strike": 21100.0,
+          "option_type": "PE",
+          "open": 60.0,
+          "high": 60.0,
+          "low": 60.0,
+          "close": 60.0,
+          "volume": 0,
+          "oi": 37500,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      },
+      {
+        "row_group": 66,
+        "values": {
+          "timestamp": "2025-12-30T11:44:00+05:30",
+          "date": "2025-12-30",
+          "expiry": "2026-01-27",
+          "underlying": "NIFTY",
+          "strike": 27400.0,
+          "option_type": "CE",
+          "open": 10.5,
+          "high": 10.7,
+          "low": 10.5,
+          "close": 10.7,
+          "volume": 585,
+          "oi": 195195,
+          "source": "upstox_expired",
+          "granularity": "1min"
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/mcx/ALUMINI/2026-06-30/MCX-ALUMINI-30Jun26-FUT.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "expiry",
+      "underlying",
+      "strike",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "open_interest"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:00:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-06-30",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 331.0,
+          "high": 331.0,
+          "low": 330.0,
+          "close": 330.0,
+          "volume": 5000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:01:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-06-30",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 330.1,
+          "high": 332.75,
+          "low": 330.1,
+          "close": 330.85,
+          "volume": 38000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:02:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-06-30",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 330.5,
+          "high": 330.55,
+          "low": 330.0,
+          "close": 330.55,
+          "volume": 15000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:03:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-06-30",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 330.8,
+          "high": 330.8,
+          "low": 330.4,
+          "close": 330.5,
+          "volume": 5000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:04:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-06-30",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 330.55,
+          "high": 330.7,
+          "low": 330.45,
+          "close": 330.7,
+          "volume": 6000.0,
+          "open_interest": 0.0
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/mcx/ALUMINI/2026-07-31/MCX-ALUMINI-31Jul26-FUT.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "expiry",
+      "underlying",
+      "strike",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "open_interest"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:00:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-07-31",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 328.3,
+          "high": 328.6,
+          "low": 328.15,
+          "close": 328.3,
+          "volume": 22000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:01:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-07-31",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 328.6,
+          "high": 328.65,
+          "low": 328.3,
+          "close": 328.3,
+          "volume": 16000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:02:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-07-31",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 328.55,
+          "high": 328.55,
+          "low": 328.2,
+          "close": 328.35,
+          "volume": 28000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:03:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-07-31",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 328.3,
+          "high": 328.45,
+          "low": 328.15,
+          "close": 328.15,
+          "volume": 18000.0,
+          "open_interest": 0.0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-06-25T09:04:00+05:30",
+          "trading_day": "2026-06-25",
+          "expiry": "2026-07-31",
+          "underlying": "ALUMINI",
+          "strike": 0.0,
+          "open": 328.3,
+          "high": 328.3,
+          "low": 328.0,
+          "close": 328.1,
+          "volume": 16000.0,
+          "open_interest": 0.0
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/options/BANKNIFTY/2021-05-27.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "expiry",
+      "symbol",
+      "strike",
+      "option_type",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "open_interest"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-05-17T09:47:00+05:30",
+          "trading_day": "2021-05-17",
+          "expiry": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "CE",
+          "open": 4994.35,
+          "high": 4994.35,
+          "low": 4994.35,
+          "close": 4994.35,
+          "volume": 51,
+          "open_interest": 8500
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-05-17T09:47:00+05:30",
+          "trading_day": "2021-05-17",
+          "expiry": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "CE",
+          "open": 4994.35,
+          "high": 4994.35,
+          "low": 4994.35,
+          "close": 4994.35,
+          "volume": 51,
+          "open_interest": 8500
+        }
+      },
+      {
+        "row_group": 4,
+        "values": {
+          "timestamp": "2021-05-21T15:20:00+05:30",
+          "trading_day": "2021-05-21",
+          "expiry": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "CE",
+          "open": 6980.0,
+          "high": 6980.0,
+          "low": 6980.0,
+          "close": 6980.0,
+          "volume": 101,
+          "open_interest": 8025
+        }
+      },
+      {
+        "row_group": 4,
+        "values": {
+          "timestamp": "2021-05-21T15:20:00+05:30",
+          "trading_day": "2021-05-21",
+          "expiry": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "CE",
+          "open": 6980.0,
+          "high": 6980.0,
+          "low": 6980.0,
+          "close": 6980.0,
+          "volume": 101,
+          "open_interest": 8025
+        }
+      },
+      {
+        "row_group": 8,
+        "values": {
+          "timestamp": "2021-05-27T09:29:00+05:30",
+          "trading_day": "2021-05-27",
+          "expiry": "2021-05-27",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "CE",
+          "open": 6800.0,
+          "high": 6800.0,
+          "low": 6800.0,
+          "close": 6800.0,
+          "volume": 101,
+          "open_interest": 7825
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/options/BANKNIFTY/2021-06-24.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "expiry",
+      "symbol",
+      "strike",
+      "option_type",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "open_interest"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-06-04T09:22:00+05:30",
+          "trading_day": "2021-06-04",
+          "expiry": "2021-06-24",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "PE",
+          "open": 8.0,
+          "high": 8.0,
+          "low": 8.0,
+          "close": 8.0,
+          "volume": 626,
+          "open_interest": 100
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2021-06-04T09:56:00+05:30",
+          "trading_day": "2021-06-04",
+          "expiry": "2021-06-24",
+          "symbol": "BANKNIFTY",
+          "strike": 27800,
+          "option_type": "PE",
+          "open": 8.0,
+          "high": 8.0,
+          "low": 8.0,
+          "close": 8.0,
+          "volume": 50,
+          "open_interest": 725
+        }
+      },
+      {
+        "row_group": 7,
+        "values": {
+          "timestamp": "2021-06-15T09:23:00+05:30",
+          "trading_day": "2021-06-15",
+          "expiry": "2021-06-24",
+          "symbol": "BANKNIFTY",
+          "strike": 27000,
+          "option_type": "PE",
+          "open": 3.25,
+          "high": 3.25,
+          "low": 3.25,
+          "close": 3.25,
+          "volume": 76,
+          "open_interest": 9275
+        }
+      },
+      {
+        "row_group": 7,
+        "values": {
+          "timestamp": "2021-06-15T09:23:00+05:30",
+          "trading_day": "2021-06-15",
+          "expiry": "2021-06-24",
+          "symbol": "BANKNIFTY",
+          "strike": 27000,
+          "option_type": "PE",
+          "open": 3.25,
+          "high": 3.25,
+          "low": 3.25,
+          "close": 3.25,
+          "volume": 76,
+          "open_interest": 9275
+        }
+      },
+      {
+        "row_group": 14,
+        "values": {
+          "timestamp": "2021-06-24T12:57:00+05:30",
+          "trading_day": "2021-06-24",
+          "expiry": "2021-06-24",
+          "symbol": "BANKNIFTY",
+          "strike": 27000,
+          "option_type": "CE",
+          "open": 7792.55,
+          "high": 7792.55,
+          "low": 7792.55,
+          "close": 7792.55,
+          "volume": 51,
+          "open_interest": 50
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/stocks_options/ADANIPOWER/2026-04-28.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "expiry",
+      "symbol",
+      "strike",
+      "option_type",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "open_interest"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-04-01T10:04:00+05:30",
+          "trading_day": "2026-04-01",
+          "expiry": "2026-04-28",
+          "symbol": "ADANIPOWER",
+          "strike": 140.0,
+          "option_type": "PE",
+          "open": 4.0,
+          "high": 4.0,
+          "low": 4.0,
+          "close": 4.0,
+          "volume": 3550,
+          "open_interest": 0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-04-01T10:13:00+05:30",
+          "trading_day": "2026-04-01",
+          "expiry": "2026-04-28",
+          "symbol": "ADANIPOWER",
+          "strike": 140.0,
+          "option_type": "PE",
+          "open": 4.5,
+          "high": 4.5,
+          "low": 4.5,
+          "close": 4.5,
+          "volume": 10650,
+          "open_interest": 35
+        }
+      },
+      {
+        "row_group": 9,
+        "values": {
+          "timestamp": "2026-04-16T10:04:00+05:30",
+          "trading_day": "2026-04-16",
+          "expiry": "2026-04-28",
+          "symbol": "ADANIPOWER",
+          "strike": 140.0,
+          "option_type": "CE",
+          "open": 47.56,
+          "high": 47.56,
+          "low": 47.56,
+          "close": 47.56,
+          "volume": 3550,
+          "open_interest": 0
+        }
+      },
+      {
+        "row_group": 9,
+        "values": {
+          "timestamp": "2026-04-16T10:05:00+05:30",
+          "trading_day": "2026-04-16",
+          "expiry": "2026-04-28",
+          "symbol": "ADANIPOWER",
+          "strike": 140.0,
+          "option_type": "CE",
+          "open": 48.19,
+          "high": 48.19,
+          "low": 48.19,
+          "close": 48.19,
+          "volume": 0,
+          "open_interest": 1491
+        }
+      },
+      {
+        "row_group": 17,
+        "values": {
+          "timestamp": "2026-04-28T12:40:00+05:30",
+          "trading_day": "2026-04-28",
+          "expiry": "2026-04-28",
+          "symbol": "ADANIPOWER",
+          "strike": 140.0,
+          "option_type": "PE",
+          "open": 0.05,
+          "high": 0.05,
+          "low": 0.05,
+          "close": 0.05,
+          "volume": 7100,
+          "open_interest": 0
+        }
+      }
+    ]
+  },
+  {
+    "relative_path": "india-index-options-1m/stocks_options/ADANIPOWER/2026-05-26.parquet",
+    "selected_columns": [
+      "timestamp",
+      "trading_day",
+      "expiry",
+      "symbol",
+      "strike",
+      "option_type",
+      "open",
+      "high",
+      "low",
+      "close",
+      "volume",
+      "open_interest"
+    ],
+    "samples": [
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-04-13T14:53:00+05:30",
+          "trading_day": "2026-04-13",
+          "expiry": "2026-05-26",
+          "symbol": "ADANIPOWER",
+          "strike": 150.0,
+          "option_type": "PE",
+          "open": 4.49,
+          "high": 4.49,
+          "low": 4.49,
+          "close": 4.49,
+          "volume": 0,
+          "open_interest": 0
+        }
+      },
+      {
+        "row_group": 0,
+        "values": {
+          "timestamp": "2026-04-13T14:54:00+05:30",
+          "trading_day": "2026-04-13",
+          "expiry": "2026-05-26",
+          "symbol": "ADANIPOWER",
+          "strike": 150.0,
+          "option_type": "PE",
+          "open": 4.49,
+          "high": 4.49,
+          "low": 4.49,
+          "close": 4.49,
+          "volume": 3550,
+          "open_interest": 0
+        }
+      },
+      {
+        "row_group": 15,
+        "values": {
+          "timestamp": "2026-05-06T09:48:00+05:30",
+          "trading_day": "2026-05-06",
+          "expiry": "2026-05-26",
+          "symbol": "ADANIPOWER",
+          "strike": 150.0,
+          "option_type": "PE",
+          "open": 0.17,
+          "high": 0.17,
+          "low": 0.17,
+          "close": 0.17,
+          "volume": 17750,
+          "open_interest": 0
+        }
+      },
+      {
+        "row_group": 15,
+        "values": {
+          "timestamp": "2026-05-06T09:52:00+05:30",
+          "trading_day": "2026-05-06",
+          "expiry": "2026-05-26",
+          "symbol": "ADANIPOWER",
+          "strike": 150.0,
+          "option_type": "PE",
+          "open": 0.17,
+          "high": 0.17,
+          "low": 0.17,
+          "close": 0.17,
+          "volume": 10650,
+          "open_interest": 0
+        }
+      },
+      {
+        "row_group": 29,
+        "values": {
+          "timestamp": "2026-05-26T09:15:00+05:30",
+          "trading_day": "2026-05-26",
+          "expiry": "2026-05-26",
+          "symbol": "ADANIPOWER",
+          "strike": 150.0,
+          "option_type": "PE",
+          "open": 0.01,
+          "high": 0.01,
+          "low": 0.01,
+          "close": 0.01,
+          "volume": 14200,
+          "open_interest": 0
+        }
+      }
+    ]
+  }
+]

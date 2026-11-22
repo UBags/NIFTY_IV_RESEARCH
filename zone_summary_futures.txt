@@ -1,0 +1,378 @@
+
+bull futures_expiry #1: N3_k1.0_m8_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'expiry': 48, 'zone_flip': 12} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 15 | 2.9 | 1.96 | 0.47 | 1.38 | 0.48 | 0.69 | 0.63 | 4.68 | -3.26 | 3.69
+2022-06-01..2023-06-01 | 16 | 6.27 | 6.74 | 0.5 | 1.71 | 1.16 | 1.71 | 1.92 | 3.34 | -2.42 | 3.17
+2023-06-01..2024-06-01 | 18 | 10.94 | 10.94 | 0.61 | 2.8 | 1.77 | 2.56 | 2.63 | 4.23 | -2.49 | 2.91
+2024-06-01..2025-01-01 | 9 | 1.7 | 1.7 | 0.67 | 1.33 | 0.62 | 0.8 | 0.92 | 3.25 | -2.46 | 2.11
+ALL | 60 | 21.34 | 21.34 | 0.53 | 1.68 | 1.04 | 1.48 | 0.9 | 6.73 | -3.26 | 3.69
+
+bull futures_expiry #2: N3_k1.25_m8_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'expiry': 47, 'zone_flip': 10} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 15 | 1.55 | 0.61 | 0.53 | 1.2 | 0.28 | 0.39 | 0.29 | 5.33 | -3.26 | 3.69
+2022-06-01..2023-06-01 | 15 | 8.09 | 8.56 | 0.53 | 2.12 | 1.55 | 2.36 | 2.58 | 3.19 | -2.42 | 3.17
+2023-06-01..2024-06-01 | 17 | 10.44 | 10.44 | 0.65 | 2.95 | 1.72 | 2.47 | 2.51 | 4.23 | -2.49 | 2.8
+2024-06-01..2025-01-01 | 8 | 0.31 | 0.31 | 0.62 | 1.06 | 0.12 | 0.15 | 0.13 | 4.13 | -2.46 | 1.37
+ALL | 57 | 19.92 | 19.92 | 0.56 | 1.66 | 1.02 | 1.44 | 0.75 | 7.52 | -3.26 | 3.69
+
+bull futures_expiry #3: N3_k1.0_m8_j0.75_tw2 strike offset +0 take-profit None | same trades: - | exits {'expiry': 49, 'zone_flip': 14} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 16 | 0.7 | -0.24 | 0.44 | 1.1 | 0.11 | 0.16 | 0.1 | 6.99 | -3.26 | 3.69
+2022-06-01..2023-06-01 | 17 | 5.99 | 6.46 | 0.59 | 1.79 | 1.07 | 1.56 | 1.29 | 4.73 | -2.42 | 3.17
+2023-06-01..2024-06-01 | 18 | 11.77 | 11.77 | 0.61 | 2.94 | 1.88 | 2.76 | 2.83 | 4.23 | -2.49 | 2.91
+2024-06-01..2025-01-01 | 10 | 0.79 | 0.79 | 0.6 | 1.13 | 0.28 | 0.35 | 0.43 | 3.25 | -2.46 | 2.11
+ALL | 63 | 18.78 | 18.78 | 0.54 | 1.55 | 0.88 | 1.25 | 0.67 | 7.93 | -3.26 | 3.69
+
+bull futures_expiry|atr15 #1: N3_k1.0_m8_j0.75_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 54, 'expiry': 29, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 23 | 4.67 | 4.67 | 0.3 | 1.56 | 0.92 | 1.44 | 1.21 | 3.92 | -0.96 | 3.69
+2022-06-01..2023-06-01 | 23 | 10.81 | 10.81 | 0.43 | 2.84 | 2.36 | 4.36 | 4.29 | 2.57 | -1.11 | 3.17
+2023-06-01..2024-06-01 | 27 | 2.46 | 2.46 | 0.26 | 1.32 | 0.49 | 0.73 | 0.59 | 4.24 | -0.73 | 2.91
+2024-06-01..2025-01-01 | 12 | 3.88 | 3.88 | 0.42 | 2.54 | 2.33 | 4.06 | 4.26 | 1.59 | -0.65 | 2.11
+ALL | 85 | 21.82 | 21.82 | 0.34 | 1.9 | 1.31 | 2.12 | 1.46 | 4.24 | -1.11 | 3.69
+
+bull futures_expiry|atr15 #2: N3_k1.0_m8_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 47, 'expiry': 26, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 20 | 3.68 | 3.68 | 0.3 | 1.55 | 0.79 | 1.21 | 0.98 | 3.83 | -0.96 | 3.69
+2022-06-01..2023-06-01 | 20 | 11.6 | 11.6 | 0.4 | 3.51 | 2.84 | 6.05 | 8.11 | 1.46 | -0.7 | 3.17
+2023-06-01..2024-06-01 | 24 | 1.41 | 1.41 | 0.25 | 1.2 | 0.29 | 0.42 | 0.33 | 4.35 | -0.73 | 2.91
+2024-06-01..2025-01-01 | 11 | 4.38 | 4.38 | 0.45 | 3.18 | 2.78 | 5.48 | 7.05 | 1.09 | -0.65 | 2.11
+ALL | 75 | 21.07 | 21.07 | 0.33 | 2.04 | 1.37 | 2.23 | 1.38 | 4.35 | -0.96 | 3.69
+
+bull futures_expiry|atr15 #3: N3_k1.0_m8_j0.25_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 56, 'expiry': 32, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 23 | 5.09 | 5.09 | 0.3 | 1.55 | 0.92 | 1.47 | 1.02 | 5.09 | -1.17 | 3.69
+2022-06-01..2023-06-01 | 25 | 10.86 | 10.86 | 0.4 | 2.56 | 2.33 | 4.4 | 4.31 | 2.57 | -1.11 | 3.17
+2023-06-01..2024-06-01 | 28 | 6.12 | 6.12 | 0.32 | 1.85 | 1.18 | 1.84 | 1.78 | 3.5 | -0.54 | 2.91
+2024-06-01..2025-01-01 | 14 | 3.05 | 3.05 | 0.43 | 1.84 | 1.55 | 2.21 | 3.36 | 1.59 | -1.11 | 2.11
+ALL | 90 | 25.12 | 25.12 | 0.36 | 1.93 | 1.43 | 2.33 | 1.4 | 5.09 | -1.17 | 3.69
+
+bull futures_expiry|atr30 #1: N3_k1.0_m8_j0.75_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 54, 'expiry': 29, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 23 | 4.36 | 4.36 | 0.3 | 1.51 | 0.86 | 1.33 | 1.09 | 4.07 | -0.96 | 3.69
+2022-06-01..2023-06-01 | 23 | 10.6 | 10.6 | 0.43 | 2.74 | 2.31 | 4.24 | 4.21 | 2.57 | -1.11 | 3.17
+2023-06-01..2024-06-01 | 27 | 2.46 | 2.46 | 0.26 | 1.32 | 0.49 | 0.73 | 0.59 | 4.24 | -0.73 | 2.91
+2024-06-01..2025-01-01 | 12 | 3.88 | 3.88 | 0.42 | 2.54 | 2.33 | 4.06 | 4.26 | 1.59 | -0.65 | 2.11
+ALL | 85 | 21.29 | 21.29 | 0.34 | 1.86 | 1.28 | 2.06 | 1.43 | 4.24 | -1.11 | 3.69
+
+bull futures_expiry|atr30 #2: N3_k1.0_m8_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 47, 'expiry': 26, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 20 | 3.52 | 3.52 | 0.3 | 1.51 | 0.75 | 1.15 | 0.93 | 3.83 | -0.96 | 3.69
+2022-06-01..2023-06-01 | 20 | 11.39 | 11.39 | 0.4 | 3.36 | 2.78 | 5.86 | 7.97 | 1.46 | -0.7 | 3.17
+2023-06-01..2024-06-01 | 24 | 1.41 | 1.41 | 0.25 | 1.2 | 0.29 | 0.42 | 0.33 | 4.35 | -0.73 | 2.91
+2024-06-01..2025-01-01 | 11 | 4.38 | 4.38 | 0.45 | 3.18 | 2.78 | 5.48 | 7.05 | 1.09 | -0.65 | 2.11
+ALL | 75 | 20.7 | 20.7 | 0.33 | 2.0 | 1.34 | 2.18 | 1.35 | 4.35 | -0.96 | 3.69
+
+bull futures_expiry|atr30 #3: N3_k1.25_m8_j0.75_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 49, 'expiry': 28, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 21 | 5.49 | 5.49 | 0.33 | 1.74 | 1.11 | 1.8 | 1.46 | 3.83 | -0.96 | 3.69
+2022-06-01..2023-06-01 | 22 | 11.18 | 11.18 | 0.45 | 3.03 | 2.45 | 4.54 | 4.44 | 2.57 | -1.11 | 3.17
+2023-06-01..2024-06-01 | 25 | -0.29 | -0.29 | 0.24 | 0.96 | -0.06 | -0.09 | -0.07 | 3.94 | -0.73 | 1.9
+2024-06-01..2025-01-01 | 11 | 4.04 | 4.04 | 0.45 | 2.71 | 2.43 | 4.27 | 4.44 | 1.59 | -0.65 | 2.11
+ALL | 79 | 20.43 | 20.43 | 0.35 | 1.9 | 1.26 | 2.04 | 1.47 | 3.94 | -1.11 | 3.69
+
+bull futures_expiry|atr45 #1: N3_k1.0_m8_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 45, 'expiry': 27, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 20 | 3.02 | 3.02 | 0.3 | 1.41 | 0.64 | 0.98 | 0.8 | 3.83 | -1.05 | 3.69
+2022-06-01..2023-06-01 | 20 | 11.39 | 11.39 | 0.4 | 3.36 | 2.78 | 5.86 | 7.97 | 1.46 | -0.7 | 3.17
+2023-06-01..2024-06-01 | 23 | 3.06 | 3.06 | 0.3 | 1.49 | 0.63 | 0.93 | 0.87 | 3.59 | -0.73 | 2.91
+2024-06-01..2025-01-01 | 11 | 4.38 | 4.38 | 0.45 | 3.18 | 2.78 | 5.48 | 7.05 | 1.09 | -0.65 | 2.11
+ALL | 74 | 21.85 | 21.85 | 0.35 | 2.07 | 1.41 | 2.3 | 1.48 | 4.18 | -1.05 | 3.69
+
+bull futures_expiry|atr45 #2: N3_k1.0_m8_j1.0_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 51, 'expiry': 28, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 23 | 3.85 | 3.85 | 0.3 | 1.42 | 0.75 | 1.17 | 0.86 | 4.58 | -1.05 | 3.69
+2022-06-01..2023-06-01 | 23 | 9.98 | 9.98 | 0.39 | 2.55 | 2.26 | 4.2 | 3.96 | 2.57 | -1.11 | 3.17
+2023-06-01..2024-06-01 | 24 | 2.52 | 2.52 | 0.29 | 1.37 | 0.51 | 0.76 | 0.71 | 3.59 | -0.73 | 2.91
+2024-06-01..2025-01-01 | 11 | 4.38 | 4.38 | 0.45 | 3.18 | 2.78 | 5.48 | 7.05 | 1.09 | -0.65 | 2.11
+ALL | 81 | 20.73 | 20.73 | 0.35 | 1.85 | 1.27 | 2.05 | 1.2 | 4.93 | -1.11 | 3.69
+
+bull futures_expiry|atr45 #3: N3_k1.25_m8_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 40, 'expiry': 26, 'zone_flip': 2} | skipped {'no_fill': 6}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 18 | 4.05 | 4.05 | 0.33 | 1.65 | 0.89 | 1.41 | 1.07 | 3.83 | -1.05 | 3.69
+2022-06-01..2023-06-01 | 19 | 11.98 | 11.98 | 0.42 | 3.82 | 2.94 | 6.31 | 8.38 | 1.46 | -0.7 | 3.17
+2023-06-01..2024-06-01 | 21 | 0.31 | 0.31 | 0.29 | 1.05 | 0.07 | 0.09 | 0.1 | 3.29 | -0.73 | 1.9
+2024-06-01..2025-01-01 | 10 | 4.54 | 4.54 | 0.5 | 3.45 | 2.89 | 5.74 | 7.31 | 1.09 | -0.65 | 2.11
+ALL | 68 | 20.88 | 20.88 | 0.37 | 2.14 | 1.39 | 2.27 | 1.42 | 4.18 | -1.05 | 3.69
+
+bull futures_zone|atr15 #1: N3_k1.25_m12_j1.25_tw4 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 23, 'zone_flip': 10} | skipped {'no_fill': 4}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -1.0 | -1.53 | 0.2 | 0.77 | -0.19 | -0.26 | -0.17 | 6.13 | -0.96 | 2.3
+2022-06-01..2023-06-01 | 6 | 13.12 | 17.16 | 0.33 | 5.63 | 1.96 | 3.18 | 3.55 | 3.77 | -0.48 | 5.5
+2023-06-01..2024-06-01 | 11 | 4.21 | 4.21 | 0.09 | 2.27 | 0.65 | 0.92 | 0.65 | 6.56 | -0.57 | 7.51
+2024-06-01..2025-01-01 | 4 | 2.91 | 2.91 | 0.5 | 6.92 | 1.0 | 1.33 | 1.74 | 2.92 | -0.39 | 2.1
+ALL | 33 | 22.74 | 22.74 | 0.24 | 3.09 | 1.01 | 1.48 | 0.92 | 7.0 | -0.96 | 9.13
+
+bull futures_zone|atr15 #2: N3_k1.25_m12_j0.25_tw3 strike offset +0 take-profit None | same trades: ['N3_k1.25_m12_j0.5_tw3', 'N3_k1.25_m12_j0.75_tw3'] | exits {'atr_stop': 24, 'zone_flip': 10} | skipped {'no_fill': 5}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | -2.16 | -2.16 | 0.17 | 0.66 | -0.4 | -0.55 | -0.29 | 7.57 | -0.96 | 2.63
+2022-06-01..2023-06-01 | 6 | 13.84 | 17.88 | 0.33 | 7.54 | 2.06 | 3.35 | 4.17 | 3.39 | -0.43 | 5.64
+2023-06-01..2024-06-01 | 11 | 3.17 | 3.17 | 0.09 | 1.8 | 0.49 | 0.69 | 0.49 | 6.58 | -0.63 | 7.14
+2024-06-01..2025-01-01 | 4 | 3.38 | 3.38 | 0.5 | 8.28 | 1.16 | 1.55 | 2.05 | 2.89 | -0.39 | 2.47
+ALL | 34 | 22.28 | 22.28 | 0.24 | 2.85 | 0.98 | 1.43 | 0.8 | 7.89 | -0.96 | 9.29
+
+bull futures_zone|atr15 #3: N3_k1.5_m12_j1.25_tw4 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 23, 'zone_flip': 10} | skipped {'no_fill': 3}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -1.0 | -1.53 | 0.2 | 0.77 | -0.19 | -0.26 | -0.17 | 6.13 | -0.96 | 2.3
+2022-06-01..2023-06-01 | 6 | 13.12 | 17.16 | 0.33 | 5.63 | 1.96 | 3.18 | 3.55 | 3.77 | -0.48 | 5.5
+2023-06-01..2024-06-01 | 11 | 4.21 | 4.21 | 0.09 | 2.27 | 0.65 | 0.92 | 0.65 | 6.56 | -0.57 | 7.51
+2024-06-01..2025-01-01 | 4 | 2.72 | 2.72 | 0.5 | 6.53 | 0.94 | 1.25 | 1.63 | 2.92 | -0.39 | 1.91
+ALL | 33 | 22.55 | 22.55 | 0.24 | 3.08 | 1.0 | 1.47 | 0.92 | 7.0 | -0.96 | 9.13
+
+bull futures_zone|atr30 #1: N3_k1.25_m12_j0.25_tw3 strike offset +0 take-profit None | same trades: ['N3_k1.25_m12_j0.5_tw3', 'N3_k1.25_m12_j0.75_tw3'] | exits {'atr_stop': 24, 'zone_flip': 10} | skipped {'no_fill': 5}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | -2.16 | -2.16 | 0.17 | 0.66 | -0.4 | -0.55 | -0.29 | 7.57 | -0.96 | 2.63
+2022-06-01..2023-06-01 | 6 | 13.62 | 17.65 | 0.33 | 6.43 | 2.02 | 3.29 | 4.09 | 3.4 | -0.54 | 5.64
+2023-06-01..2024-06-01 | 10 | 3.37 | 2.58 | 0.1 | 1.89 | 0.52 | 0.73 | 0.53 | 6.49 | -0.63 | 7.14
+2024-06-01..2025-01-01 | 4 | 3.38 | 3.38 | 0.5 | 8.28 | 1.16 | 1.55 | 2.05 | 2.89 | -0.39 | 2.47
+ALL | 34 | 21.45 | 21.45 | 0.24 | 2.67 | 0.91 | 1.32 | 0.75 | 8.11 | -0.96 | 9.29
+
+bull futures_zone|atr30 #2: N3_k1.25_m12_j0.25_tw4 strike offset +0 take-profit None | same trades: ['N3_k1.25_m12_j0.5_tw4', 'N3_k1.25_m12_j0.75_tw4'] | exits {'atr_stop': 25, 'zone_flip': 10} | skipped {'no_fill': 4}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | -1.53 | -2.06 | 0.18 | 0.7 | -0.29 | -0.4 | -0.23 | 6.67 | -0.96 | 2.3
+2022-06-01..2023-06-01 | 6 | 13.12 | 17.16 | 0.33 | 5.63 | 1.96 | 3.18 | 3.55 | 3.77 | -0.48 | 5.5
+2023-06-01..2024-06-01 | 12 | 2.91 | 2.91 | 0.08 | 1.7 | 0.45 | 0.64 | 0.41 | 7.18 | -0.58 | 7.09
+2024-06-01..2025-01-01 | 4 | 2.91 | 2.91 | 0.5 | 6.92 | 1.0 | 1.33 | 1.74 | 2.92 | -0.39 | 2.1
+ALL | 35 | 20.91 | 20.91 | 0.23 | 2.7 | 0.93 | 1.36 | 0.79 | 7.53 | -0.96 | 9.13
+
+bull futures_zone|atr30 #3: N3_k1.25_m12_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 23, 'zone_flip': 10} | skipped {'no_fill': 5}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | -2.77 | -2.77 | 0.17 | 0.48 | -0.59 | -0.78 | -0.33 | 8.42 | -0.96 | 2.55
+2022-06-01..2023-06-01 | 5 | 14.47 | 18.5 | 0.4 | 9.83 | 2.15 | 3.52 | 4.7 | 3.14 | -0.36 | 5.76
+2023-06-01..2024-06-01 | 10 | 1.99 | 1.2 | 0.1 | 1.5 | 0.31 | 0.43 | 0.31 | 6.53 | -0.53 | 5.67
+2024-06-01..2025-01-01 | 4 | 3.84 | 3.84 | 0.75 | 10.75 | 1.31 | 1.76 | 2.38 | 2.82 | -0.39 | 2.49
+ALL | 33 | 20.78 | 20.78 | 0.27 | 2.85 | 0.91 | 1.3 | 0.67 | 8.77 | -0.96 | 9.5
+
+bull futures_zone|atr45 #1: N3_k1.25_m12_j0.25_tw3 strike offset +0 take-profit None | same trades: ['N3_k1.25_m12_j0.5_tw3', 'N3_k1.25_m12_j0.75_tw3'] | exits {'atr_stop': 24, 'zone_flip': 10} | skipped {'no_fill': 5}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | -2.06 | -2.06 | 0.17 | 0.67 | -0.38 | -0.53 | -0.28 | 7.47 | -0.96 | 2.63
+2022-06-01..2023-06-01 | 6 | 13.45 | 17.49 | 0.33 | 5.82 | 1.99 | 3.24 | 3.86 | 3.56 | -0.54 | 5.64
+2023-06-01..2024-06-01 | 10 | 3.09 | 2.3 | 0.1 | 1.76 | 0.47 | 0.67 | 0.46 | 6.8 | -0.63 | 7.14
+2024-06-01..2025-01-01 | 4 | 3.38 | 3.38 | 0.5 | 8.28 | 1.16 | 1.55 | 2.05 | 2.89 | -0.39 | 2.47
+ALL | 34 | 21.12 | 21.12 | 0.24 | 2.6 | 0.9 | 1.29 | 0.75 | 8.0 | -0.96 | 9.29
+
+bull futures_zone|atr45 #2: N3_k1.25_m12_j0.25_tw4 strike offset +0 take-profit None | same trades: ['N3_k1.25_m12_j0.5_tw4', 'N3_k1.25_m12_j0.75_tw4'] | exits {'atr_stop': 25, 'zone_flip': 10} | skipped {'no_fill': 4}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | -1.68 | -2.2 | 0.18 | 0.68 | -0.31 | -0.43 | -0.25 | 6.81 | -0.96 | 2.3
+2022-06-01..2023-06-01 | 6 | 13.12 | 17.16 | 0.33 | 5.63 | 1.96 | 3.18 | 3.55 | 3.77 | -0.48 | 5.5
+2023-06-01..2024-06-01 | 12 | 2.71 | 2.71 | 0.08 | 1.62 | 0.42 | 0.6 | 0.37 | 7.38 | -0.58 | 7.09
+2024-06-01..2025-01-01 | 4 | 2.91 | 2.91 | 0.5 | 6.92 | 1.0 | 1.33 | 1.74 | 2.92 | -0.39 | 2.1
+ALL | 35 | 20.57 | 20.57 | 0.23 | 2.63 | 0.91 | 1.33 | 0.76 | 7.67 | -0.96 | 9.13
+
+bull futures_zone|atr45 #3: N3_k1.25_m12_j1.5_tw2 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 23, 'zone_flip': 10} | skipped {'no_fill': 5}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | -3.37 | -3.37 | 0.17 | 0.43 | -0.71 | -0.94 | -0.38 | 9.03 | -1.05 | 2.55
+2022-06-01..2023-06-01 | 5 | 14.47 | 18.5 | 0.4 | 9.83 | 2.15 | 3.52 | 4.7 | 3.14 | -0.36 | 5.76
+2023-06-01..2024-06-01 | 10 | 2.02 | 1.23 | 0.1 | 1.52 | 0.31 | 0.44 | 0.31 | 6.53 | -0.53 | 5.67
+2024-06-01..2025-01-01 | 4 | 3.84 | 3.84 | 0.75 | 10.75 | 1.31 | 1.76 | 2.38 | 2.82 | -0.39 | 2.49
+ALL | 33 | 20.2 | 20.2 | 0.27 | 2.71 | 0.88 | 1.26 | 0.61 | 9.38 | -1.05 | 9.5
+
+bear futures_expiry #1: N3_k1.5_m8_j1.5_tw6 strike offset +0 take-profit None | same trades: - | exits {'zone_flip': 7, 'expiry': 26} | skipped {}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 9 | 3.79 | 3.79 | 0.56 | 1.6 | 0.41 | 0.62 | 0.5 | 7.65 | -2.84 | 5.03
+2022-06-01..2023-06-01 | 11 | 6.07 | 6.07 | 0.55 | 1.9 | 0.99 | 1.67 | 2.0 | 3.09 | -2.16 | 5.24
+2023-06-01..2024-06-01 | 7 | -0.54 | -0.54 | 0.29 | 0.89 | -0.15 | -0.24 | -0.12 | 4.42 | -1.82 | 3.37
+2024-06-01..2025-01-01 | 6 | 4.5 | 4.5 | 1.0 | None | 2.41 | 4.36 | 6.26 | 1.26 | 0.2 | 1.98
+ALL | 33 | 13.82 | 13.82 | 0.58 | 1.77 | 0.61 | 0.96 | 0.51 | 7.65 | -2.84 | 5.24
+
+bear futures_expiry #2: N3_k1.5_m8_j1.25_tw6 strike offset +0 take-profit None | same trades: - | exits {'zone_flip': 7, 'expiry': 26} | skipped {}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 9 | 3.79 | 3.79 | 0.56 | 1.6 | 0.41 | 0.62 | 0.5 | 7.65 | -2.84 | 5.03
+2022-06-01..2023-06-01 | 11 | 5.98 | 5.98 | 0.55 | 1.87 | 0.97 | 1.64 | 1.92 | 3.18 | -2.16 | 5.24
+2023-06-01..2024-06-01 | 7 | -0.54 | -0.54 | 0.29 | 0.89 | -0.15 | -0.24 | -0.12 | 4.42 | -1.82 | 3.37
+2024-06-01..2025-01-01 | 6 | 4.5 | 4.5 | 1.0 | None | 2.41 | 4.36 | 6.26 | 1.26 | 0.2 | 1.98
+ALL | 33 | 13.73 | 13.73 | 0.58 | 1.77 | 0.61 | 0.95 | 0.51 | 7.65 | -2.84 | 5.24
+
+bear futures_expiry #3: N3_k0.25_m8_j1.5_tw6 strike offset +0 take-profit None | same trades: ['N3_k0.5_m8_j1.5_tw6', 'N3_k0.75_m8_j1.5_tw6', 'N3_k1.0_m8_j1.5_tw6', 'N3_k1.25_m8_j1.5_tw6'] | exits {'zone_flip': 8, 'expiry': 26} | skipped {}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 9 | 3.79 | 3.79 | 0.56 | 1.6 | 0.41 | 0.62 | 0.5 | 7.65 | -2.84 | 5.03
+2022-06-01..2023-06-01 | 11 | 6.07 | 6.07 | 0.55 | 1.9 | 0.99 | 1.67 | 2.0 | 3.09 | -2.16 | 5.24
+2023-06-01..2024-06-01 | 8 | -1.0 | -1.0 | 0.25 | 0.81 | -0.27 | -0.42 | -0.23 | 4.42 | -1.82 | 3.37
+2024-06-01..2025-01-01 | 6 | 4.5 | 4.5 | 1.0 | None | 2.41 | 4.36 | 6.26 | 1.26 | 0.2 | 1.98
+ALL | 34 | 13.35 | 13.35 | 0.56 | 1.73 | 0.59 | 0.92 | 0.5 | 7.65 | -2.84 | 5.24
+
+bear futures_expiry|atr15 #1: N5_k0.25_m8_j1.0_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw5', 'N5_k0.75_m8_j1.0_tw5', 'N5_k1.0_m8_j1.0_tw5'] | exits {'atr_stop': 29, 'expiry': 13} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | 5.32 | 5.32 | 0.42 | 1.99 | 0.69 | 1.28 | 1.48 | 3.65 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 13 | 2.79 | 2.79 | 0.31 | 1.66 | 0.54 | 0.86 | 0.86 | 3.3 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 10 | -0.1 | -0.1 | 0.2 | 0.98 | -0.03 | -0.05 | -0.04 | 2.62 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 7 | 3.67 | 3.67 | 0.43 | 3.73 | 2.02 | 3.45 | 4.03 | 1.59 | -0.39 | 2.18
+ALL | 42 | 11.68 | 11.68 | 0.33 | 1.76 | 0.61 | 1.06 | 0.9 | 3.7 | -1.18 | 5.32
+
+bear futures_expiry|atr15 #2: N5_k0.25_m12_j0.25_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m12_j0.25_tw5', 'N5_k0.75_m12_j0.25_tw5', 'N5_k1.0_m12_j0.25_tw5', 'N5_k1.25_m12_j0.25_tw5', 'N5_k1.5_m12_j0.25_tw5'] | exits {'atr_stop': 33, 'expiry': 13, 'zone_flip': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | 5.43 | 5.43 | 0.42 | 2.03 | 0.71 | 1.31 | 1.74 | 3.18 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 17 | 4.01 | 4.01 | 0.29 | 1.74 | 0.72 | 1.16 | 1.14 | 3.59 | -0.83 | 2.86
+2023-06-01..2024-06-01 | 10 | 0.83 | 0.83 | 0.3 | 1.22 | 0.27 | 0.45 | 0.41 | 2.08 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 8 | 0.64 | 0.64 | 0.25 | 1.2 | 0.32 | 0.41 | 0.62 | 1.82 | -1.01 | 2.18
+ALL | 47 | 10.91 | 10.91 | 0.32 | 1.62 | 0.56 | 0.95 | 0.86 | 3.59 | -1.18 | 5.32
+
+bear futures_expiry|atr15 #3: N5_k0.25_m8_j0.5_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j0.5_tw5', 'N5_k0.75_m8_j0.5_tw5', 'N5_k1.0_m8_j0.5_tw5'] | exits {'atr_stop': 34, 'expiry': 14, 'zone_flip': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 13 | 4.73 | 4.73 | 0.38 | 1.79 | 0.62 | 1.13 | 1.32 | 3.65 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 17 | 3.14 | 3.14 | 0.29 | 1.52 | 0.58 | 0.94 | 0.77 | 4.16 | -0.83 | 2.86
+2023-06-01..2024-06-01 | 11 | 0.28 | 0.28 | 0.27 | 1.06 | 0.09 | 0.14 | 0.13 | 2.25 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 8 | 2.89 | 2.89 | 0.38 | 2.37 | 1.52 | 2.41 | 2.73 | 1.85 | -0.77 | 2.18
+ALL | 49 | 11.05 | 11.05 | 0.33 | 1.6 | 0.57 | 0.98 | 0.75 | 4.16 | -1.18 | 5.32
+
+bear futures_expiry|atr30 #1: N5_k0.25_m8_j1.0_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw5', 'N5_k0.75_m8_j1.0_tw5', 'N5_k1.0_m8_j1.0_tw5'] | exits {'atr_stop': 29, 'expiry': 13} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | 5.32 | 5.32 | 0.42 | 1.99 | 0.69 | 1.28 | 1.48 | 3.65 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 13 | 2.87 | 2.87 | 0.31 | 1.69 | 0.55 | 0.89 | 0.89 | 3.3 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 10 | -0.1 | -0.1 | 0.2 | 0.98 | -0.03 | -0.05 | -0.04 | 2.62 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 7 | 3.67 | 3.67 | 0.43 | 3.73 | 2.02 | 3.45 | 4.03 | 1.59 | -0.39 | 2.18
+ALL | 42 | 11.76 | 11.76 | 0.33 | 1.77 | 0.62 | 1.07 | 0.9 | 3.7 | -1.18 | 5.32
+
+bear futures_expiry|atr30 #2: N5_k0.25_m12_j0.25_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m12_j0.25_tw5', 'N5_k0.75_m12_j0.25_tw5', 'N5_k1.0_m12_j0.25_tw5', 'N5_k1.25_m12_j0.25_tw5', 'N5_k1.5_m12_j0.25_tw5'] | exits {'atr_stop': 33, 'expiry': 13, 'zone_flip': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | 5.43 | 5.43 | 0.42 | 2.03 | 0.71 | 1.31 | 1.74 | 3.18 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 17 | 4.37 | 4.37 | 0.29 | 1.87 | 0.79 | 1.27 | 1.23 | 3.63 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 10 | 0.83 | 0.83 | 0.3 | 1.22 | 0.27 | 0.45 | 0.41 | 2.08 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 8 | 0.64 | 0.64 | 0.25 | 1.2 | 0.32 | 0.41 | 0.62 | 1.82 | -1.01 | 2.18
+ALL | 47 | 11.27 | 11.27 | 0.32 | 1.65 | 0.58 | 0.99 | 0.88 | 3.63 | -1.18 | 5.32
+
+bear futures_expiry|atr30 #3: N5_k0.25_m8_j0.5_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j0.5_tw5', 'N5_k0.75_m8_j0.5_tw5', 'N5_k1.0_m8_j0.5_tw5'] | exits {'atr_stop': 34, 'expiry': 14, 'zone_flip': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 13 | 4.73 | 4.73 | 0.38 | 1.79 | 0.62 | 1.13 | 1.32 | 3.65 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 17 | 3.51 | 3.51 | 0.29 | 1.62 | 0.65 | 1.06 | 0.85 | 4.2 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 11 | 0.28 | 0.28 | 0.27 | 1.06 | 0.09 | 0.14 | 0.13 | 2.25 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 8 | 2.89 | 2.89 | 0.38 | 2.37 | 1.52 | 2.41 | 2.73 | 1.85 | -0.77 | 2.18
+ALL | 49 | 11.41 | 11.41 | 0.33 | 1.63 | 0.59 | 1.02 | 0.77 | 4.2 | -1.18 | 5.32
+
+bear futures_expiry|atr45 #1: N5_k0.25_m8_j1.0_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw5', 'N5_k0.75_m8_j1.0_tw5', 'N5_k1.0_m8_j1.0_tw5'] | exits {'atr_stop': 29, 'expiry': 13} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | 5.65 | 5.65 | 0.42 | 2.06 | 0.74 | 1.36 | 1.57 | 3.65 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 13 | 2.91 | 2.91 | 0.31 | 1.71 | 0.56 | 0.9 | 0.9 | 3.3 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 10 | 0.28 | 0.28 | 0.2 | 1.07 | 0.09 | 0.15 | 0.11 | 2.62 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 7 | 3.67 | 3.67 | 0.43 | 3.73 | 2.02 | 3.45 | 4.03 | 1.59 | -0.39 | 2.18
+ALL | 42 | 12.51 | 12.51 | 0.33 | 1.85 | 0.66 | 1.15 | 0.96 | 3.7 | -1.18 | 5.32
+
+bear futures_expiry|atr45 #2: N5_k0.25_m12_j0.25_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m12_j0.25_tw5', 'N5_k0.75_m12_j0.25_tw5', 'N5_k1.0_m12_j0.25_tw5', 'N5_k1.25_m12_j0.25_tw5', 'N5_k1.5_m12_j0.25_tw5'] | exits {'atr_stop': 33, 'expiry': 13, 'zone_flip': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 12 | 5.76 | 5.76 | 0.42 | 2.1 | 0.75 | 1.4 | 1.84 | 3.18 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 17 | 4.37 | 4.37 | 0.29 | 1.86 | 0.79 | 1.27 | 1.23 | 3.63 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 10 | 1.22 | 1.22 | 0.3 | 1.36 | 0.4 | 0.67 | 0.73 | 1.7 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 8 | 0.64 | 0.64 | 0.25 | 1.2 | 0.32 | 0.41 | 0.62 | 1.82 | -1.01 | 2.18
+ALL | 47 | 11.99 | 11.99 | 0.32 | 1.71 | 0.62 | 1.05 | 0.94 | 3.63 | -1.18 | 5.32
+
+bear futures_expiry|atr45 #3: N5_k0.25_m8_j0.5_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j0.5_tw5', 'N5_k0.75_m8_j0.5_tw5', 'N5_k1.0_m8_j0.5_tw5'] | exits {'atr_stop': 34, 'expiry': 14, 'zone_flip': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 13 | 5.06 | 5.06 | 0.38 | 1.86 | 0.66 | 1.21 | 1.41 | 3.65 | -1.18 | 5.32
+2022-06-01..2023-06-01 | 17 | 3.51 | 3.51 | 0.29 | 1.62 | 0.65 | 1.06 | 0.85 | 4.2 | -0.76 | 2.86
+2023-06-01..2024-06-01 | 11 | 0.66 | 0.66 | 0.27 | 1.17 | 0.21 | 0.34 | 0.3 | 2.25 | -0.77 | 3.4
+2024-06-01..2025-01-01 | 8 | 2.89 | 2.89 | 0.38 | 2.37 | 1.52 | 2.41 | 2.73 | 1.85 | -0.77 | 2.18
+ALL | 49 | 12.13 | 12.13 | 0.33 | 1.69 | 0.62 | 1.09 | 0.82 | 4.2 | -1.18 | 5.32
+
+bear futures_zone|atr15 #1: N5_k0.25_m8_j1.0_tw3 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw3', 'N5_k0.75_m8_j1.0_tw3', 'N5_k1.0_m8_j1.0_tw3'] | exits {'atr_stop': 25, 'zone_flip': 6, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -4.29 | -4.29 | 0.2 | 0.09 | -0.43 | -0.65 | -0.51 | 8.56 | -1.45 | 0.28
+2022-06-01..2023-06-01 | 8 | -0.1 | -0.1 | 0.25 | 0.97 | -0.01 | -0.02 | -0.03 | 3.48 | -0.81 | 2.11
+2023-06-01..2024-06-01 | 10 | -2.84 | -2.84 | 0.2 | 0.2 | -0.75 | -1.09 | -0.61 | 4.74 | -0.71 | 0.56
+2024-06-01..2025-01-01 | 4 | 3.08 | 3.08 | 0.75 | 8.52 | 1.35 | 1.94 | 2.3 | 2.34 | -0.41 | 1.94
+ALL | 32 | -4.14 | -4.14 | 0.28 | 0.65 | -0.17 | -0.25 | -0.1 | 11.99 | -1.45 | 2.11
+
+bear futures_zone|atr15 #2: N5_k0.25_m8_j1.0_tw4 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw4', 'N5_k0.75_m8_j1.0_tw4', 'N5_k1.0_m8_j1.0_tw4'] | exits {'atr_stop': 26, 'zone_flip': 7, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | -2.78 | -2.78 | 0.27 | 0.37 | -0.3 | -0.45 | -0.39 | 7.25 | -0.7 | 0.69
+2022-06-01..2023-06-01 | 9 | -0.16 | -0.16 | 0.22 | 0.96 | -0.02 | -0.03 | -0.04 | 3.61 | -0.81 | 2.33
+2023-06-01..2024-06-01 | 9 | -3.16 | -3.16 | 0.22 | 0.18 | -0.82 | -1.17 | -0.66 | 4.83 | -0.68 | 0.55
+2024-06-01..2025-01-01 | 5 | 2.34 | 2.34 | 0.4 | 3.22 | 1.0 | 1.42 | 1.75 | 2.34 | -0.4 | 1.97
+ALL | 34 | -3.75 | -3.75 | 0.26 | 0.71 | -0.16 | -0.23 | -0.1 | 10.92 | -0.81 | 2.33
+
+bear futures_zone|atr15 #3: N5_k1.5_m12_j0.25_tw3 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 27, 'zone_flip': 7} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -3.5 | -3.5 | 0.2 | 0.1 | -0.39 | -0.6 | -0.46 | 7.71 | -0.63 | 0.28
+2022-06-01..2023-06-01 | 9 | 1.78 | 1.78 | 0.33 | 1.7 | 0.25 | 0.37 | 0.45 | 4.0 | -0.75 | 2.11
+2023-06-01..2024-06-01 | 10 | -2.88 | -2.88 | 0.2 | 0.2 | -0.79 | -1.12 | -0.61 | 4.79 | -0.71 | 0.56
+2024-06-01..2025-01-01 | 5 | 0.94 | 0.94 | 0.6 | 1.84 | 0.4 | 0.51 | 0.54 | 3.05 | -0.71 | 1.94
+ALL | 34 | -3.66 | -3.66 | 0.29 | 0.67 | -0.15 | -0.23 | -0.11 | 9.3 | -0.75 | 2.11
+
+bear futures_zone|atr30 #1: N5_k0.25_m8_j1.0_tw4 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw4', 'N5_k0.75_m8_j1.0_tw4', 'N5_k1.0_m8_j1.0_tw4'] | exits {'atr_stop': 26, 'zone_flip': 7, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | -2.66 | -2.66 | 0.27 | 0.38 | -0.29 | -0.43 | -0.37 | 7.25 | -0.63 | 0.69
+2022-06-01..2023-06-01 | 9 | -0.16 | -0.16 | 0.22 | 0.96 | -0.02 | -0.03 | -0.04 | 3.61 | -0.81 | 2.33
+2023-06-01..2024-06-01 | 9 | -2.93 | -2.93 | 0.22 | 0.19 | -0.77 | -1.1 | -0.65 | 4.6 | -0.68 | 0.55
+2024-06-01..2025-01-01 | 5 | 2.47 | 2.47 | 0.4 | 3.66 | 1.06 | 1.51 | 1.84 | 2.34 | -0.38 | 1.97
+ALL | 34 | -3.28 | -3.28 | 0.26 | 0.74 | -0.14 | -0.2 | -0.09 | 10.57 | -0.81 | 2.33
+
+bear futures_zone|atr30 #2: N5_k0.25_m8_j1.0_tw3 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw3', 'N5_k0.75_m8_j1.0_tw3', 'N5_k1.0_m8_j1.0_tw3'] | exits {'atr_stop': 25, 'zone_flip': 6, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -4.32 | -4.32 | 0.2 | 0.09 | -0.44 | -0.65 | -0.51 | 8.56 | -1.45 | 0.28
+2022-06-01..2023-06-01 | 8 | -0.1 | -0.1 | 0.25 | 0.97 | -0.01 | -0.02 | -0.03 | 3.48 | -0.81 | 2.11
+2023-06-01..2024-06-01 | 10 | -2.84 | -2.84 | 0.2 | 0.2 | -0.75 | -1.09 | -0.61 | 4.74 | -0.71 | 0.56
+2024-06-01..2025-01-01 | 4 | 3.19 | 3.19 | 0.75 | 11.68 | 1.4 | 2.01 | 2.38 | 2.34 | -0.3 | 1.94
+ALL | 32 | -4.06 | -4.06 | 0.28 | 0.66 | -0.17 | -0.24 | -0.1 | 11.88 | -1.45 | 2.11
+
+bear futures_zone|atr30 #3: N5_k1.5_m12_j0.25_tw3 strike offset +0 take-profit None | same trades: - | exits {'atr_stop': 27, 'zone_flip': 7} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -3.53 | -3.53 | 0.2 | 0.1 | -0.39 | -0.6 | -0.46 | 7.71 | -0.63 | 0.28
+2022-06-01..2023-06-01 | 9 | 1.78 | 1.78 | 0.33 | 1.7 | 0.25 | 0.37 | 0.45 | 4.0 | -0.75 | 2.11
+2023-06-01..2024-06-01 | 10 | -2.88 | -2.88 | 0.2 | 0.2 | -0.79 | -1.12 | -0.61 | 4.79 | -0.71 | 0.56
+2024-06-01..2025-01-01 | 5 | 1.05 | 1.05 | 0.6 | 2.04 | 0.44 | 0.57 | 0.6 | 3.05 | -0.71 | 1.94
+ALL | 34 | -3.58 | -3.58 | 0.29 | 0.68 | -0.15 | -0.23 | -0.11 | 9.19 | -0.75 | 2.11
+
+bear futures_zone|atr45 #1: N5_k0.25_m8_j1.0_tw4 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw4', 'N5_k0.75_m8_j1.0_tw4', 'N5_k1.0_m8_j1.0_tw4'] | exits {'atr_stop': 26, 'zone_flip': 7, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | -2.66 | -2.66 | 0.27 | 0.38 | -0.29 | -0.43 | -0.37 | 7.25 | -0.63 | 0.69
+2022-06-01..2023-06-01 | 9 | -0.16 | -0.16 | 0.22 | 0.96 | -0.02 | -0.03 | -0.04 | 3.61 | -0.81 | 2.33
+2023-06-01..2024-06-01 | 9 | -2.53 | -2.53 | 0.22 | 0.22 | -0.67 | -0.96 | -0.56 | 4.58 | -0.68 | 0.55
+2024-06-01..2025-01-01 | 5 | 2.47 | 2.47 | 0.4 | 3.66 | 1.06 | 1.51 | 1.84 | 2.34 | -0.38 | 1.97
+ALL | 34 | -2.87 | -2.87 | 0.26 | 0.76 | -0.12 | -0.18 | -0.08 | 10.16 | -0.81 | 2.33
+
+bear futures_zone|atr45 #2: N5_k0.25_m8_j1.0_tw3 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw3', 'N5_k0.75_m8_j1.0_tw3', 'N5_k1.0_m8_j1.0_tw3'] | exits {'atr_stop': 26, 'zone_flip': 6, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | -4.32 | -4.32 | 0.2 | 0.09 | -0.44 | -0.65 | -0.51 | 8.56 | -1.45 | 0.28
+2022-06-01..2023-06-01 | 8 | -0.1 | -0.1 | 0.25 | 0.97 | -0.01 | -0.02 | -0.03 | 3.48 | -0.81 | 2.11
+2023-06-01..2024-06-01 | 10 | -2.45 | -2.45 | 0.2 | 0.22 | -0.65 | -0.95 | -0.53 | 4.74 | -0.71 | 0.56
+2024-06-01..2025-01-01 | 5 | 2.89 | 2.89 | 0.6 | 6.1 | 1.27 | 1.82 | 2.16 | 2.34 | -0.3 | 1.91
+ALL | 33 | -3.97 | -3.97 | 0.27 | 0.66 | -0.16 | -0.24 | -0.1 | 11.6 | -1.45 | 2.11
+
+bear futures_zone|atr45 #3: N5_k0.25_m8_j1.0_tw5 strike offset +0 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw5', 'N5_k0.75_m8_j1.0_tw5', 'N5_k1.0_m8_j1.0_tw5'] | exits {'atr_stop': 23, 'zone_flip': 8, 'hypothetical_close': 1} | skipped {'no_fill': 1}
+risk clock: daily mark-to-market
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 9 | -2.91 | -2.91 | 0.22 | 0.31 | -0.29 | -0.43 | -0.41 | 7.25 | -1.03 | 0.99
+2022-06-01..2023-06-01 | 9 | -0.25 | -0.25 | 0.22 | 0.93 | -0.04 | -0.05 | -0.07 | 3.66 | -0.73 | 2.35
+2023-06-01..2024-06-01 | 9 | -2.8 | -2.8 | 0.22 | 0.2 | -0.73 | -1.03 | -0.6 | 4.75 | -0.77 | 0.58
+2024-06-01..2025-01-01 | 5 | 2.3 | 2.3 | 0.4 | 3.16 | 0.98 | 1.4 | 1.72 | 2.34 | -0.39 | 1.94
+ALL | 32 | -3.66 | -3.66 | 0.25 | 0.7 | -0.15 | -0.22 | -0.1 | 10.39 | -1.03 | 2.35

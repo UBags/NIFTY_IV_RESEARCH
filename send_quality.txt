@@ -1,0 +1,671 @@
+{
+  "version": "3",
+  "source": "54e8f187e8679648344703deaef43cca8ec75d6c41b6051c3ec04f9c36583f3d",
+  "quality_by_provider_month": [
+    {
+      "provider": "rissin_upstox",
+      "month": "2024-10",
+      "entry_candles": 13264,
+      "liquid_candles": 7808,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2024-11",
+      "entry_candles": 9902,
+      "liquid_candles": 5863,
+      "spot_sessions": 18
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2024-12",
+      "entry_candles": 10573,
+      "liquid_candles": 6404,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-01",
+      "entry_candles": 14205,
+      "liquid_candles": 8935,
+      "spot_sessions": 23
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-02",
+      "entry_candles": 12248,
+      "liquid_candles": 7691,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-03",
+      "entry_candles": 13216,
+      "liquid_candles": 7840,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-04",
+      "entry_candles": 14443,
+      "liquid_candles": 9196,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-05",
+      "entry_candles": 15323,
+      "liquid_candles": 8996,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-06",
+      "entry_candles": 14595,
+      "liquid_candles": 8799,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-07",
+      "entry_candles": 15049,
+      "liquid_candles": 8222,
+      "spot_sessions": 23
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-08",
+      "entry_candles": 12053,
+      "liquid_candles": 6967,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-09",
+      "entry_candles": 13336,
+      "liquid_candles": 7917,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-10",
+      "entry_candles": 13260,
+      "liquid_candles": 7993,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-11",
+      "entry_candles": 13216,
+      "liquid_candles": 7344,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2025-12",
+      "entry_candles": 14159,
+      "liquid_candles": 8186,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-01",
+      "entry_candles": 14600,
+      "liquid_candles": 8476,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-02",
+      "entry_candles": 16326,
+      "liquid_candles": 9372,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-03",
+      "entry_candles": 17368,
+      "liquid_candles": 10149,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-04",
+      "entry_candles": 17494,
+      "liquid_candles": 9792,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-05",
+      "entry_candles": 14554,
+      "liquid_candles": 8082,
+      "spot_sessions": 16
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-06",
+      "entry_candles": 12307,
+      "liquid_candles": 7379,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "rissin_upstox",
+      "month": "2026-07",
+      "entry_candles": 338,
+      "liquid_candles": 230,
+      "spot_sessions": 1
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-06",
+      "entry_candles": 3089,
+      "liquid_candles": 3089,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-07",
+      "entry_candles": 2307,
+      "liquid_candles": 2307,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-08",
+      "entry_candles": 2590,
+      "liquid_candles": 2590,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-09",
+      "entry_candles": 2900,
+      "liquid_candles": 2900,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-10",
+      "entry_candles": 2496,
+      "liquid_candles": 2496,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-11",
+      "entry_candles": 2618,
+      "liquid_candles": 2618,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2021-12",
+      "entry_candles": 3559,
+      "liquid_candles": 3559,
+      "spot_sessions": 23
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-01",
+      "entry_candles": 3277,
+      "liquid_candles": 3277,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-02",
+      "entry_candles": 3578,
+      "liquid_candles": 3578,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-03",
+      "entry_candles": 4042,
+      "liquid_candles": 4042,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-04",
+      "entry_candles": 3208,
+      "liquid_candles": 3208,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-05",
+      "entry_candles": 3706,
+      "liquid_candles": 3706,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-06",
+      "entry_candles": 3839,
+      "liquid_candles": 3839,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-07",
+      "entry_candles": 3282,
+      "liquid_candles": 3282,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-08",
+      "entry_candles": 3345,
+      "liquid_candles": 3345,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-09",
+      "entry_candles": 3870,
+      "liquid_candles": 3870,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-10",
+      "entry_candles": 2972,
+      "liquid_candles": 2972,
+      "spot_sessions": 18
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-11",
+      "entry_candles": 3176,
+      "liquid_candles": 3176,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2022-12",
+      "entry_candles": 3431,
+      "liquid_candles": 3431,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-01",
+      "entry_candles": 3305,
+      "liquid_candles": 3305,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-02",
+      "entry_candles": 3081,
+      "liquid_candles": 3081,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-03",
+      "entry_candles": 3157,
+      "liquid_candles": 3157,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-04",
+      "entry_candles": 2587,
+      "liquid_candles": 2587,
+      "spot_sessions": 17
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-05",
+      "entry_candles": 3289,
+      "liquid_candles": 3289,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-06",
+      "entry_candles": 3033,
+      "liquid_candles": 3033,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-07",
+      "entry_candles": 3392,
+      "liquid_candles": 3392,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-08",
+      "entry_candles": 3260,
+      "liquid_candles": 3260,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-09",
+      "entry_candles": 3093,
+      "liquid_candles": 3093,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-10",
+      "entry_candles": 3172,
+      "liquid_candles": 3172,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-11",
+      "entry_candles": 3156,
+      "liquid_candles": 3156,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2023-12",
+      "entry_candles": 4178,
+      "liquid_candles": 4178,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-01",
+      "entry_candles": 4189,
+      "liquid_candles": 4189,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-02",
+      "entry_candles": 3916,
+      "liquid_candles": 3916,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-03",
+      "entry_candles": 3342,
+      "liquid_candles": 3342,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-04",
+      "entry_candles": 3630,
+      "liquid_candles": 3630,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-05",
+      "entry_candles": 3921,
+      "liquid_candles": 3921,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-06",
+      "entry_candles": 4119,
+      "liquid_candles": 4119,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-07",
+      "entry_candles": 4520,
+      "liquid_candles": 4520,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-08",
+      "entry_candles": 4229,
+      "liquid_candles": 4229,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-09",
+      "entry_candles": 4225,
+      "liquid_candles": 4225,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-10",
+      "entry_candles": 4722,
+      "liquid_candles": 4722,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-11",
+      "entry_candles": 4079,
+      "liquid_candles": 4079,
+      "spot_sessions": 18
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2024-12",
+      "entry_candles": 4760,
+      "liquid_candles": 4760,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-01",
+      "entry_candles": 4929,
+      "liquid_candles": 4916,
+      "spot_sessions": 23
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-02",
+      "entry_candles": 4078,
+      "liquid_candles": 4067,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-03",
+      "entry_candles": 4086,
+      "liquid_candles": 4073,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-04",
+      "entry_candles": 4837,
+      "liquid_candles": 4823,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-05",
+      "entry_candles": 5087,
+      "liquid_candles": 5065,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-06",
+      "entry_candles": 4677,
+      "liquid_candles": 4668,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-07",
+      "entry_candles": 4398,
+      "liquid_candles": 4382,
+      "spot_sessions": 23
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-08",
+      "entry_candles": 3594,
+      "liquid_candles": 3583,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-09",
+      "entry_candles": 3542,
+      "liquid_candles": 3531,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-10",
+      "entry_candles": 2456,
+      "liquid_candles": 2448,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-11",
+      "entry_candles": 3113,
+      "liquid_candles": 3103,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2025-12",
+      "entry_candles": 3428,
+      "liquid_candles": 3418,
+      "spot_sessions": 22
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-01",
+      "entry_candles": 3120,
+      "liquid_candles": 3110,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-02",
+      "entry_candles": 4167,
+      "liquid_candles": 4152,
+      "spot_sessions": 21
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-03",
+      "entry_candles": 4581,
+      "liquid_candles": 4560,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-04",
+      "entry_candles": 4305,
+      "liquid_candles": 4276,
+      "spot_sessions": 20
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-05",
+      "entry_candles": 3589,
+      "liquid_candles": 3571,
+      "spot_sessions": 16
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-06",
+      "entry_candles": 1992,
+      "liquid_candles": 1968,
+      "spot_sessions": 19
+    },
+    {
+      "provider": "thetrademarkk",
+      "month": "2026-07",
+      "entry_candles": 323,
+      "liquid_candles": 323,
+      "spot_sessions": 1
+    }
+  ],
+  "completed_spot_sessions": 1250,
+  "incomplete_spot_sessions": 7,
+  "retained_raw_candles": 10016590,
+  "canonical_candles": 8672875,
+  "vendor_compared_rows": "1252299",
+  "vendor_discordant_rows": "660",
+  "session_quality": {
+    "full": 1249,
+    "near_full": 1,
+    "partial": 7
+  },
+  "bar_integrity": [
+    {
+      "provider": "rissin_upstox",
+      "bars": 5232766,
+      "ohlc_violations": 0,
+      "nonpositive_prices": 0
+    },
+    {
+      "provider": "thetrademarkk",
+      "bars": 3440109,
+      "ohlc_violations": 0,
+      "nonpositive_prices": 0
+    }
+  ],
+  "duplicate_minutes_with_conflicting_close": 0,
+  "special_sessions": [
+    {
+      "day": "2022-03-07",
+      "minute_bars": 335,
+      "has_0945": true,
+      "has_1529": true
+    },
+    {
+      "day": "2024-03-02",
+      "minute_bars": 109,
+      "has_0945": true,
+      "has_1529": false
+    },
+    {
+      "day": "2024-05-18",
+      "minute_bars": 111,
+      "has_0945": true,
+      "has_1529": false
+    },
+    {
+      "day": "2025-09-26",
+      "minute_bars": 321,
+      "has_0945": true,
+      "has_1529": false
+    },
+    {
+      "day": "2025-10-21",
+      "minute_bars": 95,
+      "has_0945": false,
+      "has_1529": false
+    },
+    {
+      "day": "2026-05-22",
+      "minute_bars": 337,
+      "has_0945": true,
+      "has_1529": false
+    },
+    {
+      "day": "2026-06-03",
+      "minute_bars": 5,
+      "has_0945": false,
+      "has_1529": true
+    }
+  ],
+  "spot_source_consistency": {
+    "days": 1246,
+    "median_abs_close_gap_pts": 0.0,
+    "max_abs_close_gap_pts": 0.0,
+    "status": "pass",
+    "note": "spot_daily close vs timed 15:29 spot close; both come from one file, so any gap needs explaining"
+  }
+}

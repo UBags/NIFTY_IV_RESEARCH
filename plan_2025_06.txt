@@ -1,0 +1,140 @@
+--- DAILY_SQL
+GroupAggregate  (cost=7730.79..7730.88 rows=1 width=76) (actual rows=21.00 loops=1)
+  Group Key: b.trading_day
+  Buffers: shared hit=3172 read=1
+  ->  Sort  (cost=7730.79..7730.80 rows=1 width=52) (actual rows=7875.00 loops=1)
+        Sort Key: b.trading_day, b.bar_time
+        Sort Method: quicksort  Memory: 746kB
+        Buffers: shared hit=3172 read=1
+        ->  Gather  (cost=1008.30..7730.78 rows=1 width=52) (actual rows=7875.00 loops=1)
+              Workers Planned: 2
+              Workers Launched: 2
+              Buffers: shared hit=3166 read=1
+              ->  Hash Join  (cost=8.30..6730.68 rows=1 width=52) (actual rows=2625.00 loops=3)
+                    Hash Cond: (b.source_file_id = f.file_id)
+                    Buffers: shared hit=3166 read=1
+                    ->  Parallel Seq Scan on spot_bars_2025 b  (cost=0.00..6722.28 rows=38 width=52) (actual rows=5250.00 loops=3)
+                          Filter: ((trading_day >= '2025-06-01'::date) AND (trading_day <= '2025-06-30'::date) AND (open > '0'::double precision) AND (high > '0'::double precision) AND (low > '0'::double precision) AND (close > '0'::double precision) AND (symbol = 'NIFTY'::text) AND (((bar_time AT TIME ZONE 'Asia/Kolkata'::text))::time without time zone >= '09:15:00'::time without time zone) AND (((bar_time AT TIME ZONE 'Asia/Kolkata'::text))::time without time zone <= '15:29:00'::time without time zone))
+                          Rows Removed by Filter: 61880
+                          Buffers: shared hit=3156
+                    ->  Hash  (cost=8.29..8.29 rows=1 width=8) (actual rows=1.00 loops=3)
+                          Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                          Buffers: shared hit=10 read=1
+                          ->  Index Scan using import_files_relative_path_key on import_files f  (cost=0.27..8.29 rows=1 width=8) (actual rows=1.00 loops=3)
+                                Index Cond: (relative_path = 'india-index-options-1m/index/NIFTY.parquet'::text)
+                                Index Searches: 3
+                                Buffers: shared hit=10 read=1
+Planning:
+  Buffers: shared hit=385 read=1
+Planning Time: 1.097 ms
+Execution Time: 25.123 ms
+--- DAILY_RV_SQL
+GroupAggregate  (cost=7101.45..7101.51 rows=1 width=20) (actual rows=21.00 loops=1)
+  Group Key: x.trading_day
+  Buffers: shared hit=3167
+  ->  Subquery Scan on x  (cost=7101.45..7101.49 rows=1 width=12) (actual rows=7854.00 loops=1)
+        Filter: (x.gap = '00:01:00'::interval)
+        Rows Removed by Filter: 21
+        Buffers: shared hit=3167
+        ->  WindowAgg  (cost=7101.45..7101.48 rows=1 width=36) (actual rows=7875.00 loops=1)
+              Window: w AS (PARTITION BY b.trading_day ORDER BY b.bar_time)
+              Storage: Memory  Maximum Storage: 17kB
+              Buffers: shared hit=3167
+              ->  Sort  (cost=7101.45..7101.45 rows=1 width=20) (actual rows=7875.00 loops=1)
+                    Sort Key: b.trading_day, b.bar_time
+                    Sort Method: quicksort  Memory: 500kB
+                    Buffers: shared hit=3167
+                    ->  Gather  (cost=1008.30..7101.44 rows=1 width=20) (actual rows=7875.00 loops=1)
+                          Workers Planned: 2
+                          Workers Launched: 2
+                          Buffers: shared hit=3167
+                          ->  Hash Join  (cost=8.30..6101.34 rows=1 width=20) (actual rows=2625.00 loops=3)
+                                Hash Cond: (b.source_file_id = f.file_id)
+                                Buffers: shared hit=3167
+                                ->  Parallel Seq Scan on spot_bars_2025 b  (cost=0.00..6092.94 rows=38 width=28) (actual rows=5250.00 loops=3)
+                                      Filter: ((trading_day >= '2025-06-01'::date) AND (trading_day <= '2025-06-30'::date) AND (close > '0'::double precision) AND (symbol = 'NIFTY'::text) AND (((bar_time AT TIME ZONE 'Asia/Kolkata'::text))::time without time zone >= '09:15:00'::time without time zone) AND (((bar_time AT TIME ZONE 'Asia/Kolkata'::text))::time without time zone <= '15:29:00'::time without time zone))
+                                      Rows Removed by Filter: 61880
+                                      Buffers: shared hit=3156
+                                ->  Hash  (cost=8.29..8.29 rows=1 width=8) (actual rows=1.00 loops=3)
+                                      Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                                      Buffers: shared hit=11
+                                      ->  Index Scan using import_files_relative_path_key on import_files f  (cost=0.27..8.29 rows=1 width=8) (actual rows=1.00 loops=3)
+                                            Index Cond: (relative_path = 'india-index-options-1m/index/NIFTY.parquet'::text)
+                                            Index Searches: 3
+                                            Buffers: shared hit=11
+Planning:
+  Buffers: shared hit=7
+Planning Time: 0.277 ms
+Execution Time: 22.442 ms
+--- SPOT_SQL
+Hash Join  (cost=1037.27..5694.78 rows=162 width=52) (actual rows=336.00 loops=1)
+  Hash Cond: (b.bar_time = tgt.ts)
+  Buffers: shared hit=3167
+  CTE target
+    ->  Nested Loop  (cost=0.01..13.37 rows=480 width=8) (actual rows=480.00 loops=1)
+          ->  Function Scan on unnest mins  (cost=0.00..0.16 rows=16 width=8) (actual rows=16.00 loops=1)
+          ->  Function Scan on generate_series d  (cost=0.01..0.31 rows=30 width=8) (actual rows=30.00 loops=16)
+  ->  Gather  (cost=1008.30..5659.61 rows=67 width=52) (actual rows=8806.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=3167
+        ->  Hash Join  (cost=8.30..4652.91 rows=28 width=52) (actual rows=2935.33 loops=3)
+              Hash Cond: (b.source_file_id = f.file_id)
+              Buffers: shared hit=3167
+              ->  Parallel Seq Scan on spot_bars_2025 b  (cost=0.00..4624.47 rows=7551 width=52) (actual rows=5870.67 loops=3)
+                    Filter: ((trading_day >= '2025-06-01'::date) AND (trading_day <= '2025-06-30'::date) AND (symbol = 'NIFTY'::text))
+                    Rows Removed by Filter: 61259
+                    Buffers: shared hit=3156
+              ->  Hash  (cost=8.29..8.29 rows=1 width=8) (actual rows=1.00 loops=3)
+                    Buckets: 1024  Batches: 1  Memory Usage: 9kB
+                    Buffers: shared hit=11
+                    ->  Index Scan using import_files_relative_path_key on import_files f  (cost=0.27..8.29 rows=1 width=8) (actual rows=1.00 loops=3)
+                          Index Cond: (relative_path = 'india-index-options-1m/index/NIFTY.parquet'::text)
+                          Filter: (status = 'completed'::text)
+                          Index Searches: 3
+                          Buffers: shared hit=11
+  ->  Hash  (cost=9.60..9.60 rows=480 width=8) (actual rows=480.00 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 27kB
+        ->  CTE Scan on target tgt  (cost=0.00..9.60 rows=480 width=8) (actual rows=480.00 loops=1)
+              Storage: Memory  Maximum Storage: 32kB
+Planning:
+  Buffers: shared hit=12
+Planning Time: 0.266 ms
+Execution Time: 14.157 ms
+--- OPT_SQL
+Hash Join  (cost=1044.34..4342209.19 rows=18711801 width=105) (actual rows=332107.00 loops=1)
+  Hash Cond: (b.bar_time = tgt.ts)
+  Buffers: shared hit=24 read=2002928 dirtied=46466 written=30242
+  CTE target
+    ->  Nested Loop  (cost=0.01..13.37 rows=480 width=8) (actual rows=480.00 loops=1)
+          ->  Function Scan on unnest mins  (cost=0.00..0.16 rows=16 width=8) (actual rows=16.00 loops=1)
+          ->  Function Scan on generate_series d  (cost=0.01..0.31 rows=30 width=8) (actual rows=30.00 loops=16)
+  ->  Gather  (cost=1015.37..3620996.20 rows=7796584 width=105) (actual rows=7719724.00 loops=1)
+        Workers Planned: 2
+        Workers Launched: 2
+        Buffers: shared hit=24 read=2002928 dirtied=46466 written=30242
+        ->  Hash Join  (cost=15.37..2840337.80 rows=3248577 width=105) (actual rows=2573241.33 loops=3)
+              Hash Cond: (b.source_file_id = f.file_id)
+              Buffers: shared hit=24 read=2002928 dirtied=46466 written=30242
+              ->  Parallel Seq Scan on option_bars_2025 b  (cost=0.00..2831595.68 rows=3272910 width=91) (actual rows=2573241.33 loops=3)
+                    Filter: ((trading_day >= '2025-06-01'::date) AND (trading_day <= '2025-06-30'::date) AND (option_type = ANY ('{PE,CE}'::text[])) AND (underlying = 'NIFTY'::text) AND (granularity = '1min'::text))
+                    Rows Removed by Filter: 26899123
+                    Buffers: shared read=2002928 dirtied=46466 written=30242
+              ->  Hash  (cost=12.04..12.04 rows=267 width=22) (actual rows=271.00 loops=3)
+                    Buckets: 1024  Batches: 1  Memory Usage: 23kB
+                    Buffers: shared hit=24
+                    ->  Seq Scan on import_files f  (cost=0.00..12.04 rows=267 width=22) (actual rows=271.00 loops=3)
+                          Filter: ((dataset = ANY ('{rissin_upstox,thetrademarkk}'::text[])) AND (status = 'completed'::text))
+                          Rows Removed by Filter: 1
+                          Buffers: shared hit=24
+  ->  Hash  (cost=9.60..9.60 rows=480 width=8) (actual rows=480.00 loops=1)
+        Buckets: 1024  Batches: 1  Memory Usage: 27kB
+        ->  CTE Scan on target tgt  (cost=0.00..9.60 rows=480 width=8) (actual rows=480.00 loops=1)
+              Storage: Memory  Maximum Storage: 32kB
+Planning:
+  Buffers: shared hit=131 read=11 dirtied=9
+Planning Time: 0.646 ms
+JIT:
+  Functions: 69
+  Options: Inlining true, Optimization true, Expressions true, Deforming true
+Execution Time: 10214.386 ms

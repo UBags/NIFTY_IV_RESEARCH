@@ -1,0 +1,30 @@
+{
+  "canonical": "india-index-options-1m/index/NIFTY.parquet",
+  "tolerance": 0.05,
+  "files": [
+    {
+      "file_id": 4,
+      "dataset": "thetrademarkk",
+      "relative_path": "india-index-options-1m/index/NIFTY.parquet",
+      "status": "completed",
+      "bars": 486050,
+      "first_day": "2021-05-24",
+      "last_day": "2026-07-02",
+      "role": "canonical"
+    },
+    {
+      "file_id": 3,
+      "dataset": "top_level_nifty_spot",
+      "relative_path": "NIFTY.parquet",
+      "status": "completed",
+      "bars": 486050,
+      "first_day": "2021-05-24",
+      "last_day": "2026-07-02",
+      "role": "other",
+      "overlap_bars": 486050,
+      "discordant_bars": 0,
+      "max_abs_close_gap": 0.0
+    }
+  ],
+  "discordant_bars": 0
+}

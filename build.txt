@@ -1,0 +1,149 @@
+NIFTY source files 272, missing ledger entries 0, incomplete 0
+Daily OHLC: 1,257 sessions; complete: 1,250
+spot: 352 source records processed
+month:2021-06: spot 352, options 67,633; staging 0.02 GB; free 104 GB
+spot: 336 source records processed
+month:2021-07: spot 336, options 61,505; staging 0.03 GB; free 104 GB
+spot: 336 source records processed
+month:2021-08: spot 336, options 78,882; staging 0.05 GB; free 104 GB
+spot: 336 source records processed
+month:2021-09: spot 336, options 87,457; staging 0.07 GB; free 104 GB
+spot: 320 source records processed
+month:2021-10: spot 320, options 72,521; staging 0.09 GB; free 104 GB
+spot: 304 source records processed
+month:2021-11: spot 304, options 76,830; staging 0.11 GB; free 104 GB
+spot: 368 source records processed
+month:2021-12: spot 368, options 102,241; staging 0.13 GB; free 104 GB
+spot: 320 source records processed
+month:2022-01: spot 320, options 97,775; staging 0.15 GB; free 104 GB
+spot: 320 source records processed
+month:2022-02: spot 320, options 104,455; staging 0.18 GB; free 104 GB
+spot: 333 source records processed
+month:2022-03: spot 333, options 118,880; staging 0.20 GB; free 104 GB
+spot: 304 source records processed
+month:2022-04: spot 304, options 93,199; staging 0.23 GB; free 104 GB
+spot: 336 source records processed
+month:2022-05: spot 336, options 107,827; staging 0.25 GB; free 104 GB
+spot: 352 source records processed
+month:2022-06: spot 352, options 111,957; staging 0.28 GB; free 104 GB
+spot: 336 source records processed
+month:2022-07: spot 336, options 96,622; staging 0.30 GB; free 104 GB
+spot: 320 source records processed
+month:2022-08: spot 320, options 100,111; staging 0.32 GB; free 104 GB
+spot: 352 source records processed
+month:2022-09: spot 352, options 108,278; staging 0.35 GB; free 104 GB
+spot: 288 source records processed
+month:2022-10: spot 288, options 85,349; staging 0.37 GB; free 104 GB
+spot: 336 source records processed
+month:2022-11: spot 336, options 92,098; staging 0.39 GB; free 104 GB
+spot: 352 source records processed
+month:2022-12: spot 352, options 97,434; staging 0.41 GB; free 104 GB
+spot: 336 source records processed
+month:2023-01: spot 336, options 96,511; staging 0.43 GB; free 104 GB
+spot: 320 source records processed
+month:2023-02: spot 320, options 88,230; staging 0.46 GB; free 104 GB
+spot: 336 source records processed
+month:2023-03: spot 336, options 94,592; staging 0.48 GB; free 104 GB
+spot: 272 source records processed
+month:2023-04: spot 272, options 76,310; staging 0.50 GB; free 104 GB
+spot: 352 source records processed
+month:2023-05: spot 352, options 97,915; staging 0.52 GB; free 104 GB
+spot: 336 source records processed
+month:2023-06: spot 336, options 91,622; staging 0.54 GB; free 104 GB
+spot: 336 source records processed
+month:2023-07: spot 336, options 100,003; staging 0.56 GB; free 104 GB
+spot: 352 source records processed
+month:2023-08: spot 352, options 97,515; staging 0.59 GB; free 104 GB
+spot: 320 source records processed
+month:2023-09: spot 320, options 92,281; staging 0.61 GB; free 104 GB
+spot: 320 source records processed
+month:2023-10: spot 320, options 94,526; staging 0.63 GB; free 104 GB
+spot: 320 source records processed
+month:2023-11: spot 320, options 52,606; staging 0.65 GB; free 104 GB
+spot: 320 source records processed
+month:2023-12: spot 320, options 70,341; staging 0.67 GB; free 104 GB
+spot: 352 source records processed
+month:2024-01: spot 352, options 71,710; staging 0.69 GB; free 104 GB
+spot: 336 source records processed
+month:2024-02: spot 336, options 63,154; staging 0.71 GB; free 104 GB
+spot: 297 source records processed
+month:2024-03: spot 297, options 51,635; staging 0.73 GB; free 104 GB
+spot: 320 source records processed
+month:2024-04: spot 320, options 56,026; staging 0.74 GB; free 104 GB
+spot: 345 source records processed
+month:2024-05: spot 345, options 60,825; staging 0.76 GB; free 104 GB
+spot: 304 source records processed
+month:2024-06: spot 304, options 64,114; staging 0.78 GB; free 104 GB
+spot: 352 source records processed
+month:2024-07: spot 352, options 70,639; staging 0.81 GB; free 104 GB
+spot: 336 source records processed
+month:2024-08: spot 336, options 65,335; staging 0.83 GB; free 103 GB
+spot: 336 source records processed
+month:2024-09: spot 336, options 66,132; staging 0.85 GB; free 103 GB
+spot: 352 source records processed
+option: 200,000 source records processed
+month:2024-10: spot 352, options 313,205; staging 0.95 GB; free 103 GB
+spot: 288 source records processed
+option: 200,000 source records processed
+month:2024-11: spot 288, options 243,504; staging 1.02 GB; free 103 GB
+spot: 336 source records processed
+option: 200,000 source records processed
+month:2024-12: spot 336, options 275,484; staging 1.11 GB; free 103 GB
+spot: 368 source records processed
+option: 200,000 source records processed
+month:2025-01: spot 368, options 392,128; staging 1.22 GB; free 103 GB
+spot: 320 source records processed
+option: 200,000 source records processed
+month:2025-02: spot 320, options 305,125; staging 1.32 GB; free 103 GB
+spot: 304 source records processed
+option: 200,000 source records processed
+month:2025-03: spot 304, options 306,876; staging 1.41 GB; free 103 GB
+spot: 304 source records processed
+option: 200,000 source records processed
+month:2025-04: spot 304, options 334,993; staging 1.52 GB; free 103 GB
+spot: 336 source records processed
+option: 200,000 source records processed
+month:2025-05: spot 336, options 359,677; staging 1.63 GB; free 103 GB
+spot: 336 source records processed
+option: 200,000 source records processed
+month:2025-06: spot 336, options 332,107; staging 1.74 GB; free 103 GB
+spot: 368 source records processed
+option: 200,000 source records processed
+month:2025-07: spot 368, options 334,193; staging 1.84 GB; free 102 GB
+spot: 304 source records processed
+option: 200,000 source records processed
+month:2025-08: spot 304, options 269,964; staging 1.93 GB; free 102 GB
+spot: 348 source records processed
+option: 200,000 source records processed
+month:2025-09: spot 348, options 289,307; staging 2.02 GB; free 102 GB
+spot: 307 source records processed
+option: 200,000 source records processed
+month:2025-10: spot 307, options 274,577; staging 2.11 GB; free 102 GB
+spot: 304 source records processed
+option: 200,000 source records processed
+month:2025-11: spot 304, options 288,012; staging 2.20 GB; free 102 GB
+spot: 352 source records processed
+option: 200,000 source records processed
+month:2025-12: spot 352, options 311,733; staging 2.30 GB; free 102 GB
+spot: 320 source records processed
+option: 200,000 source records processed
+month:2026-01: spot 320, options 318,834; staging 2.40 GB; free 102 GB
+spot: 336 source records processed
+option: 200,000 source records processed
+month:2026-02: spot 336, options 362,184; staging 2.52 GB; free 102 GB
+spot: 304 source records processed
+option: 200,000 source records processed
+month:2026-03: spot 304, options 379,039; staging 2.64 GB; free 102 GB
+spot: 320 source records processed
+option: 200,000 source records processed
+month:2026-04: spot 320, options 375,089; staging 2.76 GB; free 102 GB
+spot: 252 source records processed
+option: 200,000 source records processed
+month:2026-05: spot 252, options 309,965; staging 2.86 GB; free 101 GB
+spot: 289 source records processed
+option: 200,000 source records processed
+month:2026-06: spot 289, options 247,092; staging 2.94 GB; free 101 GB
+spot: 16 source records processed
+month:2026-07: spot 16, options 10,426; staging 2.94 GB; free 101 GB
+Loaded spot source=19,963; option raw=10,016,590; canonical=8,672,875; duplicate surplus=1,343,715
+V4 snapshot complete: research_cache_v4.sqlite eligible= True

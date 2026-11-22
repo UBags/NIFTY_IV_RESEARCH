@@ -1,0 +1,1 @@
+Contract coverage: contract_coverage_rissin opportunity-days: 4996 admitted: 379

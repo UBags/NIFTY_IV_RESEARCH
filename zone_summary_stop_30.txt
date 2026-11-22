@@ -1,0 +1,54 @@
+
+bull naked|atr30 #1: N3_k1.5_m8_j0.25_tw5 strike offset +300 take-profit None | same trades: - | exits {'atr_stop': 40, 'expiry': 29, 'zone_flip': 1} | skipped {'no_fill': 11}
+risk clock: P&L booked on exit day (option marks not stored daily: risk understated)
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 15 | 3.2 | 3.2 | 0.4 | 2.07 | 1.09 | 2.88 | 1.95 | 1.67 | -0.67 | 1.52
+2022-06-01..2023-06-01 | 22 | 8.52 | 8.52 | 0.45 | 3.04 | 1.94 | 6.26 | 8.31 | 1.05 | -0.88 | 1.6
+2023-06-01..2024-06-01 | 22 | 6.66 | 6.66 | 0.45 | 2.64 | 1.71 | 5.07 | 7.51 | 0.9 | -0.76 | 1.72
+2024-06-01..2025-01-01 | 11 | 1.44 | 1.44 | 0.45 | 1.55 | 0.85 | 1.45 | 2.49 | 1.01 | -1.01 | 0.94
+ALL | 70 | 19.82 | 19.82 | 0.44 | 2.43 | 1.51 | 4.11 | 3.37 | 1.67 | -1.01 | 1.72
+
+bull naked|atr30 #2: N5_k1.25_m8_j0.25_tw6 strike offset +400 take-profit None | same trades: - | exits {'atr_stop': 40, 'expiry': 28} | skipped {'no_fill': 26}
+risk clock: P&L booked on exit day (option marks not stored daily: risk understated)
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 13 | 3.58 | 3.58 | 0.46 | 2.28 | 1.08 | 3.18 | 3.19 | 1.14 | -0.61 | 2.18
+2022-06-01..2023-06-01 | 18 | 7.26 | 7.26 | 0.44 | 3.25 | 1.76 | 6.5 | 5.53 | 1.34 | -0.61 | 2.06
+2023-06-01..2024-06-01 | 24 | 4.02 | 4.02 | 0.33 | 1.71 | 0.93 | 2.31 | 1.62 | 2.53 | -1.15 | 2.15
+2024-06-01..2025-01-01 | 13 | 2.35 | 2.35 | 0.46 | 2.17 | 1.52 | 3.78 | 7.03 | 0.58 | -0.5 | 1.12
+ALL | 68 | 17.21 | 17.21 | 0.41 | 2.26 | 1.27 | 3.65 | 1.94 | 2.53 | -1.15 | 2.18
+
+bull naked|atr30 #3: N5_k0.25_m8_j0.25_tw6 strike offset +400 take-profit None | same trades: ['N5_k0.5_m8_j0.25_tw6', 'N5_k0.75_m8_j0.25_tw6', 'N5_k1.0_m8_j0.25_tw6'] | exits {'atr_stop': 40, 'expiry': 28} | skipped {'no_fill': 26}
+risk clock: P&L booked on exit day (option marks not stored daily: risk understated)
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 13 | 3.29 | 3.29 | 0.46 | 2.18 | 1.01 | 2.92 | 2.92 | 1.14 | -0.61 | 2.18
+2022-06-01..2023-06-01 | 18 | 7.26 | 7.26 | 0.44 | 3.25 | 1.76 | 6.5 | 5.53 | 1.34 | -0.61 | 2.06
+2023-06-01..2024-06-01 | 24 | 4.02 | 4.02 | 0.33 | 1.71 | 0.93 | 2.31 | 1.62 | 2.53 | -1.15 | 2.15
+2024-06-01..2025-01-01 | 13 | 2.35 | 2.35 | 0.46 | 2.17 | 1.52 | 3.78 | 7.03 | 0.58 | -0.5 | 1.12
+ALL | 68 | 16.92 | 16.92 | 0.41 | 2.24 | 1.26 | 3.59 | 1.9 | 2.53 | -1.15 | 2.18
+
+bear naked|atr30 #1: N5_k0.25_m8_j1.0_tw3 strike offset -300 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw3', 'N5_k0.75_m8_j1.0_tw3', 'N5_k1.0_m8_j1.0_tw3'] | exits {'atr_stop': 27, 'expiry': 14} | skipped {'no_fill': 4}
+risk clock: P&L booked on exit day (option marks not stored daily: risk understated)
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 10 | 4.98 | 4.98 | 0.4 | 3.81 | 1.36 | 5.61 | 5.78 | 0.88 | -0.59 | 2.38
+2022-06-01..2023-06-01 | 11 | 5.82 | 5.82 | 0.45 | 4.94 | 1.74 | 8.86 | 6.42 | 0.92 | -0.36 | 1.77
+2023-06-01..2024-06-01 | 11 | -0.23 | -0.23 | 0.27 | 0.93 | -0.09 | -0.17 | -0.12 | 2.04 | -0.76 | 1.71
+2024-06-01..2025-01-01 | 9 | 1.63 | 1.63 | 0.33 | 2.32 | 1.21 | 3.54 | 3.39 | 0.84 | -0.4 | 1.16
+ALL | 41 | 12.2 | 12.2 | 0.37 | 2.54 | 1.1 | 3.52 | 1.65 | 2.1 | -0.76 | 2.38
+
+bear naked|atr30 #2: N5_k0.25_m8_j0.75_tw3 strike offset -300 take-profit None | same trades: ['N5_k0.5_m8_j0.75_tw3', 'N5_k0.75_m8_j0.75_tw3', 'N5_k1.0_m8_j0.75_tw3'] | exits {'atr_stop': 30, 'expiry': 14} | skipped {'no_fill': 4}
+risk clock: P&L booked on exit day (option marks not stored daily: risk understated)
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | 4.56 | 4.56 | 0.36 | 3.08 | 1.24 | 4.65 | 4.1 | 1.13 | -0.59 | 2.38
+2022-06-01..2023-06-01 | 12 | 5.72 | 5.72 | 0.42 | 4.64 | 1.71 | 8.63 | 5.72 | 1.02 | -0.36 | 1.77
+2023-06-01..2024-06-01 | 11 | -0.23 | -0.23 | 0.27 | 0.93 | -0.09 | -0.17 | -0.12 | 2.04 | -0.76 | 1.71
+2024-06-01..2025-01-01 | 10 | 1.7 | 1.7 | 0.3 | 2.1 | 1.13 | 3.3 | 3.52 | 0.84 | -0.4 | 1.16
+ALL | 44 | 11.75 | 11.75 | 0.34 | 2.34 | 1.04 | 3.26 | 1.39 | 2.4 | -0.76 | 2.38
+
+bear naked|atr30 #3: N5_k0.25_m8_j1.0_tw3 strike offset -200 take-profit None | same trades: ['N5_k0.5_m8_j1.0_tw3', 'N5_k0.75_m8_j1.0_tw3', 'N5_k1.0_m8_j1.0_tw3'] | exits {'atr_stop': 29, 'expiry': 14} | skipped {'no_fill': 2}
+risk clock: P&L booked on exit day (option marks not stored daily: risk understated)
+period | trades closed | P&L earned lakh | cohort lakh | win | PF | Sharpe | Sortino | Calmar | max DD | max loss | max win
+2021-06-01..2022-06-01 | 11 | 4.49 | 4.49 | 0.55 | 3.73 | 1.39 | 5.11 | 6.95 | 0.66 | -0.62 | 2.02
+2022-06-01..2023-06-01 | 12 | 5.12 | 5.12 | 0.42 | 4.1 | 1.67 | 7.97 | 7.95 | 0.66 | -0.3 | 1.47
+2023-06-01..2024-06-01 | 11 | 0.1 | 0.1 | 0.27 | 1.04 | 0.04 | 0.1 | 0.06 | 1.58 | -0.52 | 1.51
+2024-06-01..2025-01-01 | 9 | 1.54 | 1.54 | 0.33 | 2.45 | 1.28 | 3.99 | 3.89 | 0.69 | -0.34 | 1.03
+ALL | 43 | 11.25 | 11.25 | 0.4 | 2.57 | 1.14 | 3.73 | 1.97 | 1.62 | -0.62 | 2.02

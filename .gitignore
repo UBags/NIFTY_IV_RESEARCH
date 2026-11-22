@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# Data, caches and run outputs (large / generated)
+*.sqlite
+*.sqlite-*
+*.db
+*.parquet
+*.csv
+*.xlsx
+*.log
+coverage*/
+pilot*/
+zone_grid*/
+zone_report*/
+portfolio*/
+*_rankings*/
+
+# Secrets
+.env
+*.pem
+secrets/
