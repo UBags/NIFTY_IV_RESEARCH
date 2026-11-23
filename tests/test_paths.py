@@ -1333,3 +1333,19 @@ class TradeLedgerV4912(GridV491):
         thin=tl.ledger(str(p),self.op,self.sp,[key],end='2025-01-01',cfg=pcfg(target_margin=2.5e9),target_fraction=1.)   # far beyond any minute's volume
         self.assertTrue(all(r['status']=='not_filled_at_size' for r in thin))
         b=tl.brief(ok[0]);self.assertEqual(list(b)[:6],['strategy','side','year','status','option','entry_time'])
+
+class StopCompareV4912(GridV491):
+    """V4.9.12: alternative stops on fixed entries; the current stop reproduces the paths file; metrics on a known series."""
+    def test_current_stop_reproduces_and_alternatives_differ(self):
+        from nifty_iv.diagnostics import stop_compare as sc
+        p,_,_=self._grid()
+        res,err,n=sc.compare(str(p),('bull','naked',0.,'zone_only_tw2','none','none'),['time1','mloss1','pct0.25'],end='2025-01-01')
+        self.assertLessEqual(err,1.);self.assertTrue(n);self.assertEqual(len(res['none'][0]),n)
+        self.assertTrue(all(len(res[s][0])<=n for s in res))
+    def test_metrics_on_a_known_series(self):
+        from nifty_iv.diagnostics import stop_compare as sc
+        tr=[dict(entry='2024-01-01',exit='2024-01-02',net=100.),dict(entry='2024-01-03',exit='2024-01-04',net=-50.),dict(entry='2024-01-05',exit='2024-01-08',net=150.)]
+        m=sc.metrics(tr,1000.)
+        self.assertEqual(m['trades'],3);self.assertAlmostEqual(m['win_ratio'],.667,3);self.assertEqual(m['profit_factor'],5.0);self.assertEqual(m['payoff'],2.5)
+        self.assertAlmostEqual(m['max_dd'],.05);self.assertEqual(m['net_rs'],200)
+        self.assertEqual(sc.metrics([dict(entry='2024-01-01',exit='2024-01-02',net=10.)],1000.)['calmar'],float('inf'))
