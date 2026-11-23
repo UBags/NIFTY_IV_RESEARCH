@@ -149,17 +149,19 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
 
 YEAR_KEYS=('gross_pnl_rs','slippage_rs','brokerage_rs','gst_rs','stt_rs','other_charges_rs','interest_rs','net_pnl_rs','net_after_interest_rs')
 def years(rows,rate=.10):
-    allrows=rows;g=collections.defaultdict(list)
+    """Per strategy and calendar year of entry: valued trades summed; unvalued trades counted (a year with only unvalued trades still appears)."""
+    g=collections.defaultdict(list);unv=collections.Counter()
     for r in rows:
-        if r['status']!='unvalued':g[r['strategy'],r['year']].append(r)
+        if r['status']=='unvalued':unv[r['strategy'],r['year']]+=1;g.setdefault((r['strategy'],r['year']),[])
+        else:g[r['strategy'],r['year']].append(r)
     out=[]
     for (s,y),rs in sorted(g.items()):
         d=dict(strategy=s,year=y,trades=len(rs),**{k:sum(r[k] for r in rs) for k in YEAR_KEYS})
-        m=[r['margin_rs'] for r in rs];d['avg_margin_rs']=round(sum(m)/len(m))
+        m=[r['margin_rs'] for r in rs];d['avg_margin_rs']=round(sum(m)/len(m)) if m else None
         d['net_pct_of_avg_margin']=round(100*d['net_after_interest_rs']/d['avg_margin_rs'],2) if d['avg_margin_rs'] else None
         my=sum(r['margin_rs']*r['days_held'] for r in rs)/365;d['margin_years']=round(my/d['avg_margin_rs'],3) if d['avg_margin_rs'] else None
         d['net_pct_per_margin_year']=round(100*d['net_after_interest_rs']/my,2) if my else None
-        d['days_held']=sum(r['days_held'] for r in rs);d['unvalued_trades']=sum(1 for r in allrows if r['strategy']==s and r['year']==y and r['status']=='unvalued');out.append(d)
+        d['days_held']=sum(r['days_held'] for r in rs);d['unvalued_trades']=unv[s,y];out.append(d)
     return out
 
 def parse_strategy(s):
@@ -190,7 +192,7 @@ def main(argv=None):
         for d in yr:
             if d['strategy']!=s:continue
             print(f"{d['year']:<6}{d['trades']:>7}{d['gross_pnl_rs']:>20,.0f}{rs(d['slippage_rs'])}{rs(d['brokerage_rs'])}{d['gst_rs']:>10,.0f}{d['stt_rs']:>10,.0f}{d['other_charges_rs']:>10,.0f}"
-                  f"{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{rs(d['avg_margin_rs'])}{d['net_pct_of_avg_margin']:>13.1f}%")
+                  f"{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{rs(d['avg_margin_rs'] or 0)}{(d['net_pct_of_avg_margin'] or 0):>13.1f}%" + (f"  ({d['unvalued_trades']} unvalued)" if d['unvalued_trades'] else ''))
     print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(unv)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
     print(f'-> {a.out}_trades.csv, {a.out}_years.csv  (net = after slippage and all charges; % avg margin = net after interest / average margin per trade)')
     for r in unv:print(f"  unvalued: {r['strategy']} signal {r['signal']} entry {r['entry_first_fill']} ({r['exit_reason']})")
