@@ -28,8 +28,11 @@ Year end (calendar year by default, --year fy for April-March), in this order
      (default 8) against future business income only. Tax = --tax-rate (default 35%) x (business income after carried-forward
      losses + FD interest), floored at zero. FD interest is taxed as it accrues, each year.
   3. cash: the year's business income less all tax due goes into a new FD and the line limit rises by --leverage x
-     that amount. If the business income does not cover the tax (or is a loss), the shortfall and the loss are paid in as new
-     capital; the FDs and the line stay as they were.
+     that amount. If the business income does not cover the tax (or is a loss), the shortfall is funded by --loss-funding:
+       fd-surplus (default, user's rule): FDs are broken to cover it as long as the FDs (with their interest) exceed the capital put
+                  in so far; only the part that would take them below the capital put in is paid in as new capital. The line is
+                  then capped at --leverage x the remaining FDs (unchanged when --leverage is 0).
+       pay-in     the whole shortfall is paid in as new capital; FDs and line stay as they were (the earlier behaviour).
 
 Wealth = FDs (with accrued interest) + trading cash (negative while losses are carried on the line) - the tax accrued on the year so
 far (so the year-end payment is not a fall in wealth, and a loss during the year reduces the tax due; with --tax-rate 0 it is the
@@ -71,7 +74,7 @@ def load_trades(paths,hol):
 def year_of(d,mode):return d.year if mode=='calendar' else (d.year if d.month>=4 else d.year-1)
 def year_label(y,mode):return str(y) if mode=='calendar' else f'FY{y}-{str(y+1)[2:]}'
 
-def simulate(trades,start,end,fd0=3.125e6,line0=2.5e6,base_margin=2.5e6,leverage=.8,fd_rate=.0625,line_rate=.10,tax_rate=.35,carry_years=8,year_mode='calendar'):
+def simulate(trades,start,end,fd0=3.125e6,line0=2.5e6,base_margin=2.5e6,leverage=.8,fd_rate=.0625,line_rate=.10,tax_rate=.35,carry_years=8,year_mode='calendar',loss_funding='fd-surplus'):
     """Day-by-day simulation; returns (years, daily, trades with scale)."""
     base_margin=base_margin or 2.5e6
     fdq=(1+fd_rate/4)**(4/365)-1
@@ -87,7 +90,7 @@ def simulate(trades,start,end,fd0=3.125e6,line0=2.5e6,base_margin=2.5e6,leverage
         y=year_of(d,year_mode)
         if y!=cy:                                                          # close the previous year before trading today
             _close_year(Y,cash,cf,cy,tax_rate,carry_years);fd_add=Y['to_new_fd_rs']
-            fd+=fd_add;line+=leverage*fd_add;cash=0.
+            fd+=fd_add;line+=leverage*fd_add;cash=0.;fd,line=_fund_shortfall(Y,fd,line,contrib,leverage,loss_funding)
             if Y['new_capital_rs']>0:contrib+=Y['new_capital_rs'];flows[d]=Y['new_capital_rs']
             Y['fd_end_rs']=fd;Y['line_next_year_rs']=line;Y['wealth_end_rs']=fd;years.append(Y);cy=y;Y=new_year(y)
         for t in entries.get(d,()):
@@ -106,11 +109,24 @@ def simulate(trades,start,end,fd0=3.125e6,line0=2.5e6,base_margin=2.5e6,leverage
         daily.append(dict(day=d.isoformat(),fd_rs=round(fd),trading_cash_rs=round(cash),borrowed_rs=round(borrowed),tax_accrued_rs=round(due),
                           wealth_pre_tax_rs=round(fd+cash),wealth_rs=round(fd+cash-due),new_capital_rs=round(flows.get(d,0.))))
         d+=dt.timedelta(1)
-    _close_year(Y,cash,cf,cy,tax_rate,carry_years);fd+=Y['to_new_fd_rs']
+    _close_year(Y,cash,cf,cy,tax_rate,carry_years);fd+=Y['to_new_fd_rs'];fd,line_end=_fund_shortfall(Y,fd,line,contrib,leverage,loss_funding)
     final_cap=Y['new_capital_rs'];contrib+=final_cap
-    Y['fd_end_rs']=fd;Y['line_next_year_rs']=line+leverage*Y['to_new_fd_rs'];Y['wealth_end_rs']=fd;years.append(Y)
+    Y['fd_end_rs']=fd;Y['line_next_year_rs']=line_end+leverage*Y['to_new_fd_rs'];Y['wealth_end_rs']=fd;years.append(Y)
     unrealised=sum(v for v in settle.values())
     return years,daily,dict(contributed_rs=contrib,final_wealth_rs=fd,flows=flows,final_new_capital_rs=final_cap,unrealised_rs=unrealised,carried_forward_loss_rs=sum(a for _,a in cf))
+
+LOSS_FUNDING=('fd-surplus','pay-in')
+def _fund_shortfall(Y,fd,line,contrib,leverage,mode):
+    """Year end: fund the shortfall (Y['new_capital_rs'] as set by _close_year: loss and / or tax not covered by the year's business
+    income). fd-surplus: from the FDs down to the capital put in so far, the rest as new capital; the line is capped at leverage x the
+    remaining FDs. pay-in: all as new capital. Returns (fd, line); sets Y['fd_withdrawn_rs'] and Y['new_capital_rs']."""
+    if mode not in LOSS_FUNDING:raise ValueError(f'loss funding {mode}: one of {LOSS_FUNDING}')
+    short=Y['new_capital_rs'];draw=0.
+    if short>0 and mode=='fd-surplus':
+        draw=min(short,max(0.,fd-contrib));fd-=draw;Y['new_capital_rs']=short-draw
+        if draw and leverage>0:line=min(line,leverage*fd)
+    Y['fd_withdrawn_rs']=draw
+    return fd,line
 
 def _taxable(biz,other,cf_available):
     """Taxable income of a year: business income after carried-forward losses, plus FD interest; a business loss is first set off
@@ -179,29 +195,31 @@ def main(argv=None):
     ap.add_argument('--fd-rate',type=float,default=.0625)
     ap.add_argument('--tax-rate',type=float,default=.35);ap.add_argument('--carry-years',type=int,default=8)
     ap.add_argument('--year',choices=('calendar','fy'),default='calendar',help='tax and reinvestment year: calendar (default) or Indian financial year April-March')
+    ap.add_argument('--loss-funding',choices=LOSS_FUNDING,default='fd-surplus',help='year-end loss or unpaid tax: fd-surplus = break FDs while they exceed the capital put in, '
+                    'pay in only what would take them below it (line capped at --leverage x the FDs); pay-in = pay all of it in as new capital')
     ap.add_argument('--out',default='reinvest')
     a=ap.parse_args(argv);hol=read_holidays(a.holidays);tr=load_trades(a.trades,hol)
     start=D(a.start) if a.start else min(t['entry'] for t in tr);end=D(a.end) if a.end else max(t['ret'] for t in tr)
     line0=a.line if a.line is not None else a.leverage*a.fd
-    years,daily,info=simulate(tr,start,end,a.fd,line0,a.base_margin,a.leverage,a.fd_rate,a.line_rate,a.tax_rate,a.carry_years,a.year)
+    years,daily,info=simulate(tr,start,end,a.fd,line0,a.base_margin,a.leverage,a.fd_rate,a.line_rate,a.tax_rate,a.carry_years,a.year,a.loss_funding)
     R=ratios(daily,tr,info,start,end)
     cols=['year','line_rs','scale','trades','trading_pnl_rs','line_interest_rs','business_income_rs','fd_interest_rs','cf_loss_used_rs','taxable_income_rs','tax_rs',
-          'carried_forward_rs','to_new_fd_rs','new_capital_rs','fd_end_rs','wealth_end_rs','line_next_year_rs','peak_borrowed_rs','days_over_limit']
+          'carried_forward_rs','to_new_fd_rs','fd_withdrawn_rs','new_capital_rs','fd_end_rs','wealth_end_rs','line_next_year_rs','peak_borrowed_rs','days_over_limit']
     with open(f'{a.out}_years.csv','w',newline='') as f:
         w=csv.DictWriter(f,cols,extrasaction='ignore');w.writeheader()
         for Y in years:w.writerow({k:(round(v,3) if k=='scale' else round(v) if isinstance(v,float) else v) for k,v in Y.items()})
     with open(f'{a.out}_daily.csv','w',newline='') as f:
         w=csv.DictWriter(f,list(daily[0]));w.writeheader();w.writerows(daily)
-    S=dict(period=[start.isoformat(),end.isoformat()],settings=dict(fd=a.fd,line=line0,base_margin=a.base_margin,leverage=a.leverage,fd_rate=a.fd_rate,line_rate=a.line_rate,tax_rate=a.tax_rate,carry_years=a.carry_years,year=a.year),
+    S=dict(period=[start.isoformat(),end.isoformat()],settings=dict(fd=a.fd,line=line0,base_margin=a.base_margin,leverage=a.leverage,fd_rate=a.fd_rate,line_rate=a.line_rate,tax_rate=a.tax_rate,carry_years=a.carry_years,year=a.year,loss_funding=a.loss_funding),
            contributed_rs=round(info['contributed_rs']),final_wealth_rs=round(info['final_wealth_rs']),gain_rs=round(info['final_wealth_rs']-info['contributed_rs']),
            total_tax_rs=round(sum(Y['tax_rs'] for Y in years)),carried_forward_loss_at_end_rs=round(info['carried_forward_loss_rs']),**R)
     json.dump(S,open(f'{a.out}_summary.json','w'),indent=1)
     L=lambda v:f'{v/LAKH:>10.2f}'
-    print(f"tax {a.tax_rate:.0%}, FD {a.fd/LAKH:.2f} L @ {a.fd_rate:.2%}, line {line0/LAKH:.2f} L @ {a.line_rate:.1%}, leverage {a.leverage:g}:1, sizes relative to {a.base_margin/LAKH:.0f} L; Rs lakh")
-    print(f"{'year':<9}{'line':>10}{'size':>8}{'trades':>7}{'trading':>10}{'line int':>10}{'business':>10}{'FD int':>10}{'taxable':>10}{'tax':>10}{'loss c/f':>10}{'to FD':>10}{'new cap':>10}{'wealth':>10}{'over lim':>9}")
+    print(f"loss funding {a.loss_funding}; tax {a.tax_rate:.0%}, FD {a.fd/LAKH:.2f} L @ {a.fd_rate:.2%}, line {line0/LAKH:.2f} L @ {a.line_rate:.1%}, leverage {a.leverage:g}:1, sizes relative to {a.base_margin/LAKH:.0f} L; Rs lakh")
+    print(f"{'year':<9}{'line':>10}{'size':>8}{'trades':>7}{'trading':>10}{'line int':>10}{'business':>10}{'FD int':>10}{'taxable':>10}{'tax':>10}{'loss c/f':>10}{'to FD':>10}{'FD out':>10}{'new cap':>10}{'wealth':>10}{'over lim':>9}")
     for Y in years:
         print(f"{Y['year']:<9}{L(Y['line_rs'])}{Y['scale']:>7.2f}x{Y['trades']:>7}{L(Y['trading_pnl_rs'])}{L(Y['line_interest_rs'])}{L(Y['business_income_rs'])}{L(Y['fd_interest_rs'])}"
-              f"{L(Y['taxable_income_rs'])}{L(Y['tax_rs'])}{L(Y['carried_forward_rs'])}{L(Y['to_new_fd_rs'])}{L(Y['new_capital_rs'])}{L(Y['wealth_end_rs'])}{Y['days_over_limit']:>9}")
+              f"{L(Y['taxable_income_rs'])}{L(Y['tax_rs'])}{L(Y['carried_forward_rs'])}{L(Y['to_new_fd_rs'])}{L(Y.get('fd_withdrawn_rs',0.))}{L(Y['new_capital_rs'])}{L(Y['wealth_end_rs'])}{Y['days_over_limit']:>9}")
     print(f"\nput in {S['contributed_rs']/LAKH:.2f} L, final wealth {S['final_wealth_rs']/LAKH:.2f} L, gain {S['gain_rs']/LAKH:.2f} L, tax paid {S['total_tax_rs']/LAKH:.2f} L"
           + (f", loss carried forward at the end {S['carried_forward_loss_at_end_rs']/LAKH:.2f} L" if S['carried_forward_loss_at_end_rs'] else ''))
     print(f"annual return (time-weighted) {R['annual_return_twr']:.1%}, IRR {R['irr']:.1%}, Sharpe {R['sharpe']}, Sortino {R['sortino']}, max drawdown {R['max_drawdown']:.1%} "

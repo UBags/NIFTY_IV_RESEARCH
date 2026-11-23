@@ -1,6 +1,6 @@
 # Code map — NIFTY_IV_RESEARCH V4.9.12 (2026-11-23)
 
-644 tests pass (numpy path, `ZONE_NO_NUMBA=1`; numba optional). Installable package `nifty_iv` (src layout, `pip install -e ".[fast,test]"`),
+648 tests pass (numpy path, `ZONE_NO_NUMBA=1`; numba optional). Installable package `nifty_iv` (src layout, `pip install -e ".[fast,test]"`),
 one console script per tool. Two pipelines share the repo; only the zone pipeline is active. Supersedes `CODEMAP_V4_9_11.md`
 (module names below are the post-reorganisation ones; `docs/MODULE_MAP.md` maps old flat names to new).
 
@@ -77,7 +77,7 @@ zone/holdout.py    replays the freeze once on 2025-01..2026-07 (code + paths dig
 | `nifty-diag-equity-dd-scan` | equity_dd_scan | best single green / red per equity-drawdown cap (bar-close marks, exact O(1)-per-trade kernel) |
 | `nifty-diag-trade-ledger` | trade_ledger | replays chosen strategies through `LedgerSim` (a `PathSim`) with every fill logged; per-trade and per-year CSVs, combined account with peak margin, interest on margin at `--rate`. Options below |
 | `nifty-diag-stop-compare` | stop_compare | 50 alternative stops on a strategy's fixed entries: win ratio, profit factor, payoff, Sharpe, Sortino, Calmar, drawdown |
-| `nifty-diag-reinvest` | reinvest_sim | defaults FD 31.25 L at 6.25%, line 0.8:1 at 10%, tax 35%; ledger trades through an FD-backed credit line: margin borrowed to the next trading day after exit, year-end reinvestment of after-tax profit, line = `--leverage` × FDs, tax with loss set-off / carry-forward, ratios and IRR |
+| `nifty-diag-reinvest` | reinvest_sim | defaults FD 31.25 L at 6.25%, line 0.8:1 at 10%, tax 35%; year-end losses paid from FDs above the capital put in, new capital only below it (`--loss-funding`); ledger trades through an FD-backed credit line: margin borrowed to the next trading day after exit, year-end reinvestment of after-tax profit, line = `--leverage` × FDs, tax with loss set-off / carry-forward, ratios and IRR |
 | `nifty-diag-entry-liquidity` | entry_liquidity | per entry window: raw volume, minutes traded, minutes big enough for a whole lot, tradable units (why an entry filled or not) |
 | `nifty-diag-dd-cutoffs` / `-dd-bins` / `-dd-recovery` / `-zone-diagnose` / `-pair-exits` | | V4.9.8–4.9.10 studies |
 

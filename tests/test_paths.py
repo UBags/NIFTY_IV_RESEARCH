@@ -1560,3 +1560,31 @@ class ConservativeExitsV4912(GridV491):
         self.assertFalse(info['resized']);self.assertTrue(all(abs(r['check_rupees'])<=1 for r in rows if r['status']=='closed'))
         info={};tl.ledger(str(p),self.op,self.sp,[('bull','naked',0.,'zone_only_tw2','none','none')],end='2025-01-01',cfg=pcfg(),overrides=dict(slippage=.5,brokerage=20.),info=info)
         self.assertEqual(info['changed'],{'slippage':.5,'brokerage':20.})
+
+class LossFundingV4912(unittest.TestCase):
+    """V4.9.12 (user): a year-end loss is paid from FDs while they exceed the capital put in; only the rest is new capital."""
+    def _run(self,trades,mode='fd-surplus',lev=.8):
+        from nifty_iv.diagnostics import reinvest_sim as rs
+        import datetime as dt
+        T=[dict(strategy='s',side='bull',entry=dt.date.fromisoformat(e),exit=dt.date.fromisoformat(x),ret=rs.next_trading_day(dt.date.fromisoformat(x),set()),margin=2.5e6,pnl=p) for e,x,p in trades]
+        return rs.simulate(T,dt.date(2023,1,2),dt.date(2025,12,31),fd0=3e6,line0=2.5e6,leverage=lev,fd_rate=0.,line_rate=0.,tax_rate=0.,loss_funding=mode)
+    def test_loss_smaller_than_surplus_comes_from_fds(self):
+        Y,_,info=self._run([('2023-03-01','2023-03-03',1e6),('2024-03-01','2024-03-04',-2e5)])
+        s=Y[1]['scale'];loss=2e5*s                                                              # 2024 trade at the 2024 size
+        self.assertAlmostEqual(Y[1]['fd_withdrawn_rs'],loss);self.assertEqual(Y[1]['new_capital_rs'],0)
+        self.assertAlmostEqual(info['contributed_rs'],3e6);self.assertAlmostEqual(Y[1]['fd_end_rs'],4e6-loss)
+        self.assertAlmostEqual(Y[1]['line_next_year_rs'],min(2.5e6+.8e6,.8*(4e6-loss)))       # line capped at 0.8 x the FDs left
+    def test_loss_beyond_surplus_is_partly_paid_in(self):
+        Y,_,info=self._run([('2023-03-01','2023-03-03',1e5),('2024-03-01','2024-03-04',-5e5)])
+        s=Y[1]['scale'];loss=5e5*s
+        self.assertAlmostEqual(Y[1]['fd_withdrawn_rs'],1e5);self.assertAlmostEqual(Y[1]['new_capital_rs'],loss-1e5)
+        self.assertAlmostEqual(Y[1]['fd_end_rs'],3e6);self.assertAlmostEqual(info['contributed_rs'],3e6+loss-1e5)
+    def test_first_year_loss_is_paid_in_and_pay_in_mode_keeps_old_behaviour(self):
+        Y,_,info=self._run([('2023-03-01','2023-03-03',-2e5)])
+        self.assertEqual(Y[0]['fd_withdrawn_rs'],0);self.assertAlmostEqual(Y[0]['new_capital_rs'],2e5)
+        Y,_,info=self._run([('2023-03-01','2023-03-03',1e6),('2024-03-01','2024-03-04',-2e5)],mode='pay-in')
+        self.assertEqual(Y[1]['fd_withdrawn_rs'],0);self.assertAlmostEqual(Y[1]['new_capital_rs'],2e5*Y[1]['scale'])
+        self.assertAlmostEqual(Y[1]['fd_end_rs'],4e6)
+    def test_zero_leverage_keeps_the_line(self):
+        Y,_,info=self._run([('2023-03-01','2023-03-03',1e6),('2024-03-01','2024-03-04',-2e5)],lev=0.)
+        self.assertAlmostEqual(Y[1]['fd_withdrawn_rs'],2e5);self.assertAlmostEqual(Y[1]['line_next_year_rs'],2.5e6)
