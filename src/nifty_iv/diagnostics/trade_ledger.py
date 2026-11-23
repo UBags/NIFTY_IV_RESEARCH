@@ -84,15 +84,17 @@ def charges_sum(recs):
         out['mkt_notional']+=abs(r['units'])*r['px'];out['fill_notional']+=abs(r['units'])*r['actual']
     return out
 
-def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None):
+def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None):
     """Rows (one per trade) for strategies [(side, structure, level, config, profit, stop)]. target_fraction: replay every trade at
     ceil(fraction x the margin-table lots on the paths' --target-margin) instead of the size the paths file was built with (1 = the
     whole budget); the signals and exit decision bars stay those of the paths file, see main's notes."""
     db=sqlite3.connect(f'file:{paths}?mode=ro',uri=True);cfg=cfg or config_from_meta(db);bars,final=bars_from_paths(db)
-    resized=target_fraction is not None
-    if resized:
+    overrides={k:v for k,v in (overrides or {}).items() if v is not None}
+    resized=target_fraction is not None or bool(overrides)                 # replayed under other fill settings: no check against the paths file
+    if target_fraction is not None:
         if not getattr(cfg,'target_margin',None):raise SystemExit('--target-fraction needs a paths file built with --target-margin')
         cfg=SimpleNamespace(**dict(vars(cfg),target_fraction=float(target_fraction)))
+    if overrides:cfg=SimpleNamespace(**dict(vars(cfg),**overrides))
     pinfo={}
     for side,st,off,sb,lot,units,strike,sexp,eday,epx,eix in db.execute('SELECT side,structure,offset,signal_bar,lot,units,strike,short_expiry,entry_day,entry_short_px,entry_index FROM paths'):
         pinfo[side,st,float(off),sb]=dict(lot=lot,units=units,strike=strike,expiry=sexp,entry_day=eday,entry_px=epx,entry_index=eix)
@@ -118,7 +120,7 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                     if pair is None:
                         if not resized:raise SystemExit(f'replay of {key} signal bar {t} did not fill ({why}); the paths file says it did')
                         rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=x['entry_day'][:4],status='not_filled_at_size',signal=f"{bars[t].day} {zs.hhmm(bars[t].end)}",
-                                         entry_first_fill=x['entry_day'],exit_reason=why,note='the larger size could not fill (full size or nothing); excluded from totals'));continue
+                                         entry_first_fill=x['entry_day'],exit_reason=why,note='could not fill under the replay\'s size / fill settings (full size or nothing); excluded from totals'));continue
                     ent=list(rec);rec.clear()
                     legs=list(pair['held']);want=abs(pair['units'])
                     e_first,e_last=entry_minutes(sim.cap_log,legs,want)
@@ -216,16 +218,19 @@ def main(argv=None):
     ap.add_argument('--start',default='2000-01-01');ap.add_argument('--end',default='2026-07-01');ap.add_argument('--rate',type=float,default=.10,help='interest a year on margin (default 10%%)')
     ap.add_argument('--target-fraction',type=float,help='replay at ceil(this x the margin-table lots on the paths\' budget) instead of the paths\' size (1 = the whole budget). '
                     'Signals and exit decision bars stay those of the paths file; an entry that cannot fill at the larger size is listed and excluded')
+    ap.add_argument('--max-participation',type=float,help='replay with this share of each minute\'s volume (default: the paths file\'s, 0.20 unless built otherwise)')
+    ap.add_argument('--entry-minutes',type=int,help='replay with entries limited to this many minutes after the signal bar\'s close (default: the paths file\'s; 0 = no limit)')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
-    rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction)
+    rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction,
+              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes))
     if not rows:sys.exit('no trades')
     rows.sort(key=lambda r:(r.get('entry_first_fill') or '',r['strategy']))                      # one time line across strategies
     yr=years(rows,a.rate)
     for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr),(f'{a.out}_brief.csv',[brief(r) for r in rows])):
         keys=list(dict.fromkeys(k for r in data for k in r))
         with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
-    resized=a.target_fraction is not None
+    resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None
     val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];skip=[r for r in rows if r not in val]
     bad=[] if resized else [r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
@@ -247,7 +252,9 @@ def main(argv=None):
         print(f"{'all':<6}{t['trades']:>7}{t['gross_pnl_rs']:>20,.0f}{'':>12}{rs(t['interest_rs'])}{rs(t['net_after_interest_rs'])}{max((d['peak_margin_rs'] or 0) for d in cy):>14,.0f}")
     if resized:
         sp=sum(1 for r in val if r.get('exit_spilled_bars'))
-        print(f"\nReplayed at {a.target_fraction:g} x the margin-table lots: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
+        how=(f'{a.target_fraction:g} x the margin-table lots' if a.target_fraction is not None else "the paths file's size")
+        how+=(f', participation {a.max_participation:g}' if a.max_participation is not None else '')+(f', entry minutes {a.entry_minutes}' if a.entry_minutes is not None else '')
+        print(f"\nReplayed at {how}: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
               f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete. "
               "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")
     else:

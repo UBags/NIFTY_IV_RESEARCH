@@ -1,3 +1,11 @@
+# V4.9.12 (2026-11-23)
+
+| Item | Change |
+|---|---|
+| Entry window (user) | `nifty-zone-paths --entry-minutes` (default 30): a first entry must reach full size within this many trading minutes after the signal bar's close (continuing into the next session's opening minutes if the day ends first), still at most --max-participation (default 0.20) of each minute's volume and inside --entry-bars windows. Before: up to 3 x 45 = 135 minutes. Paths files built earlier have no limit (behaviour unchanged when replayed) |
+| `trade_ledger.py` | `--max-participation`, `--entry-minutes`: replay a strategy's trades under other fill settings without rebuilding the paths file (signals, sequencing and exit decision bars stay the paths file's) |
+| New tools | `equity_dd_scan`, `trade_ledger`, `stop_compare`, `reinvest_sim` (FD-backed line, year-end reinvestment, tax, --leverage, --leverage-interest) |
+
 # V4.9.11 (2026-11-14)
 
 | Item | Change |

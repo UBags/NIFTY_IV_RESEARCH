@@ -28,7 +28,8 @@ Fills (decided at a bar close, executed in the next bar's minutes; 09:15-09:59 n
   every leg is sliced minute by minute, taking at most --max-participation of that minute's traded volume, in whole
   lots, at the minute's (open+high+low+close)/4; slippage (tenor and volume scaled) and dated statutory charges are
   applied to each leg's total. V4.9.7: a first entry may use the windows of --entry-bars bars (default 3) and must reach its
-  full size (ceil(--target-fraction x margin-table lots) with --target-margin), else it is not taken; a roll re-entry must complete
+  full size (V4.9.12: and only the first --entry-minutes trading minutes after the signal bar's close, default 30, continuing into
+  the next session's opening minutes if the day ends first) (ceil(--target-fraction x margin-table lots) with --target-margin), else it is not taken; a roll re-entry must complete
   inside its bar. An exit buys shorts back
   before selling longs; whatever is left carries into later bars; a short reaching expiry settles; a long still open
   --max-exit-lag-bars after its shorts are gone is booked at its last close less --forced-exit-haircut (flagged).
@@ -193,16 +194,18 @@ class PathSim:
         d=self.arrays(day);k=self.key(c);px=(d.buy if buy else d.sell).get(k)
         if px is None or i0>=i1:return None
         vol=d.vol[k][i0:i1];return np.floor(vol*self.cfg.max_participation)//lot*lot,px[i0:i1],vol
-    def enter(self,k,legs,lot,start=None,need=None,bars=1,colour=None):
+    def enter(self,k,legs,lot,start=None,need=None,bars=1,colour=None,minutes=None):
         """legs: [(contract, signed units)], all at the same size, filled in the windows of bars k, k+1, .., k+bars-1 (a window = the
         minutes of the bar after it), from minute index `start` in the first window if given (after an exit that used earlier minutes
         of the same bar). All legs fill together, minute by minute, in equal whole lots: each minute trades the smallest of the legs'
         tradable quantities, so no leg is ever held without the others. Full size or nothing (V4.9.7): the entry completes when the
         matched quantity reaches the target (`need`, default the target); short of it after the last window nothing is traded. With
         colour, a window after the first is used only if the zone at that bar's close is still `colour` (else zone_flip_before_fill).
+        minutes (V4.9.12, --entry-minutes): at most this many trading minutes, counted from the first minute after the signal bar's
+        close and running on into the next windows (the next session's opening minutes after the day's last bar), are used.
         Returns dict(status='ok'|'none', ...): ok carries bar (bar whose window completed it), day (first fill day), last_day; none
         carries reason, limit='long'|'short' (the thinner leg) and until (the last bar whose window was tried)."""
-        want=abs(legs[0][1]);need=want if need is None else need;got=0;pieces=[];tot=collections.Counter();last=k
+        want=abs(legs[0][1]);need=want if need is None else need;got=0;pieces=[];tot=collections.Counter();last=k;budget=minutes or None
         for j in range(bars):
             kk=k+j
             if j and kk>=len(self.bars):break
@@ -215,6 +218,9 @@ class PathSim:
             if start is not None and not j:
                 sday,smin=start
                 if sday==day:i0=max(i0,smin)                  # same window as the previous exit's last fill: only later minutes
+            if budget is not None:
+                if budget<=0:break
+                i1=min(i1,i0+budget);budget-=max(0,i1-i0)
             if i0>=i1:continue
             cs=[self.caps(day,i0,i1,c,lot,u>0) for c,u in legs]
             if any(x is None for x in cs):continue           # a leg without a price that day: nothing tradable in this window
@@ -355,7 +361,8 @@ class PathSim:
             for c in missing:self.gap(g,'not_extracted','long' if dict(legs)[c]>0 else 'short',c[0],zb.days_between(day,c[0]))
             return None,'not_extracted'
         first=size is None
-        r=self.enter(k,legs,lot,start,need=size,bars=self.cfg.entry_bars if first else 1,colour=('G' if side=='bull' else 'R') if first else None)
+        r=self.enter(k,legs,lot,start,need=size,bars=self.cfg.entry_bars if first else 1,colour=('G' if side=='bull' else 'R') if first else None,
+                     minutes=getattr(self.cfg,'entry_minutes',None) if first else None)
         if r['status']=='none':
             self.attempt_end=r.get('until',k)
             if r.get('limit'):self.counts['no_liquid_entry_limited_by_'+r['limit']]+=1
@@ -523,7 +530,7 @@ def config(a):
         max_exit_lag_bars=a.max_exit_lag_bars,forced_exit_haircut=a.forced_exit_haircut,hedge_bps=0.,hedge_statutory=True,slippage_points=a.slippage_points,
         roll_entry_after_exit=getattr(a,'roll_entry_after_exit',True),fill_price=getattr(a,'fill_price','ohlc4'),target_units=getattr(a,'target_units',None),
         target_margin=getattr(a,'target_margin',None),offset_mode=getattr(a,'offset_mode','points'),
-        target_fraction=getattr(a,'target_fraction',1.),entry_bars=getattr(a,'entry_bars',1))
+        target_fraction=getattr(a,'target_fraction',1.),entry_bars=getattr(a,'entry_bars',1),entry_minutes=getattr(a,'entry_minutes',None))
 
 def main():
     ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter);zb.add_common(ap)
@@ -537,10 +544,12 @@ def main():
     ap.add_argument('--target-margin',type=float,help='Margin budget in rupees (e.g. 2500000): entry lots = ceil(--target-fraction x the whole lots whose upper-end margin from the strategy_spec margin table fits it on the fill day); overrides --target-units and --lots')
     ap.add_argument('--target-fraction',type=float,default=ss.TARGET_FRACTION,help='share of the budget\'s maximum lots one entry trades, rounded up (V4.9.7 default 0.40: a trader runs several strategies; 1 = V4.9.6)')
     ap.add_argument('--entry-bars',type=int,default=3,help='45-minute windows an entry may use to reach its full size (V4.9.7 default 3); full size or nothing; a roll re-entry uses one')
+    ap.add_argument('--entry-minutes',type=int,default=30,help='trading minutes after the signal bar\'s close in which a first entry must reach its full size (V4.9.12 default 30; 0 = no limit beyond --entry-bars)')
     ap.add_argument('--target-units',type=float,help='Target units per entry (e.g. 650): exchange lots = round(target / lot of the day), so positions keep their size across lot-size changes (50 / 25 / 75 / 65); overrides --lots')
     ap.set_defaults(lots=10)
     a=ap.parse_args();a.offsets=zb.parse_offsets(a.offsets,a.offset_mode)
-    if not 0<a.max_participation<=1 or not 0<a.target_fraction<=1 or a.entry_bars<1:sys.exit('--max-participation and --target-fraction must be in (0, 1], --entry-bars >= 1')
+    if not 0<a.max_participation<=1 or not 0<a.target_fraction<=1 or a.entry_bars<1 or a.entry_minutes<0:sys.exit('--max-participation and --target-fraction must be in (0, 1], --entry-bars >= 1, --entry-minutes >= 0')
+    a.entry_minutes=a.entry_minutes or None
     structures=[s for s in a.structures.split(',') if s]
     bad=set(structures)-set(OPTION_STRUCTURES+FUTURES_STRUCTURES)
     if bad:sys.exit(f'Unknown structures {sorted(bad)}')
@@ -565,7 +574,7 @@ def main():
     G=('event','leg','day','signal_bar','side','structure','offset','cp','strike','atm','expiry','dte','roll')
     db.executemany(f'INSERT INTO gaps VALUES({",".join("?"*len(G))})',[tuple(g[c] for c in G) for g in sim.gaps])
     meta=dict(release=nifty_iv.__version__,args=vars(a),counts=dict(sim.counts),grid=zs.GRID,stale=zs.STALE,
-              fill_model='sliced minutes: <= max participation of each minute, whole lots, all legs matched minute by minute; first entry: up to --entry-bars windows, full target size or nothing (no trade if the zone changes first); roll re-entry: one window, full size; fill price per --fill-price, slippage and charges on each leg total per window',seconds=round(time.time()-t0))
+              fill_model='sliced minutes: <= max participation of each minute, whole lots, all legs matched minute by minute; first entry: up to --entry-bars windows and --entry-minutes minutes, full target size or nothing (no trade if the zone changes first); roll re-entry: one window, full size; fill price per --fill-price, slippage and charges on each leg total per window',seconds=round(time.time()-t0))
     db.executemany('INSERT INTO meta VALUES(?,?)',[(k,json.dumps(v,default=str)) for k,v in meta.items()]);db.commit()
     n=db.execute('SELECT COUNT(*),SUM(status="no_fill") FROM paths').fetchone();db.close();market.close();os.replace(tmp,a.out)
     print('Counts:',dict(sim.counts));print(f'{n[0]} paths ({n[1]} not filled) -> {a.out}')

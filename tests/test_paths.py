@@ -1137,7 +1137,7 @@ class CliDryRunV497(Market):
             sys.argv=['zone_paths.py','--options',str(self.op),'--spot',str(self.sp),'--structures','naked,futures_zone','--target-margin','2500000','--out',str(d/'p.sqlite')]
             with contextlib.redirect_stdout(io.StringIO()) as buf:zp.main()
             self.assertIn('paths',buf.getvalue());db=sqlite3.connect(d/'p.sqlite');args=json.loads(db.execute("SELECT value FROM meta WHERE name='args'").fetchone()[0]);db.close()
-            self.assertEqual((args['entry_bars'],args['max_participation'],args['target_fraction']),(3,.2,.4))
+            self.assertEqual((args['entry_bars'],args['max_participation'],args['target_fraction'],args['entry_minutes']),(3,.2,.4,30))
             sys.argv=['zone_grid.py','--paths',str(d/'p.sqlite'),'--out',str(d/'g'),'--start','2023-06-01','--min-trades','1','--no-compound']
             with contextlib.redirect_stdout(io.StringIO()) as buf:zg.main()
             self.assertIn('Selection band',buf.getvalue());self.assertTrue((d/'g'/'grid_report.json').exists())
@@ -1402,3 +1402,22 @@ class ReinvestSimV4912(unittest.TestCase):
         self.assertEqual(S['settings']['line'],1.2e7);self.assertEqual(S['settings']['line_rate'],.12)
         self.assertAlmostEqual(float(Y[0]['scale']),4.8);self.assertEqual(int(Y[0]['trading_pnl_rs']),480000)
         self.assertAlmostEqual(int(Y[0]['line_interest_rs']),round(2.5e6*4.8*.12*5/365),delta=20)  # entry Wed 1 Mar to money back Mon 6 Mar: 5 days (+ interest on accrued interest)
+
+class EntryMinutesV4912(Market):
+    """V4.9.12 (user): a first entry may only use --entry-minutes trading minutes after the signal bar's close."""
+    def _sim(self,lots,minutes,part=.1):
+        m=self.build();lot=LotMaster(None).get(self.days[0],'2024-01-11').qty
+        m=self.edit('UPDATE opt_1m SET volume=?',(lot*10,))                                     # 10% participation: one lot a minute
+        bars=self.bars_for(self.days)
+        sim=zp.PathSim(m,bars,['G']*len(bars),pcfg(lots=lots,entry_bars=3,entry_minutes=minutes,max_participation=part));out=[]
+        sim.run({0:['bull']},('naked',),(0,),sink=out.extend,progress=False);return out[0],lot
+    def test_entry_fills_inside_the_minute_limit(self):
+        p,lot=self._sim(30,30);self.assertEqual((p['status'],p['units']),('closed',30*lot))
+    def test_entry_needing_more_minutes_is_not_taken(self):
+        p,lot=self._sim(31,30);self.assertEqual((p['status'],p['reason']),('no_fill','no_liquid_entry'))
+        p,lot=self._sim(31,None);self.assertEqual(p['status'],'closed')                         # no minute limit: the 45-minute window suffices
+    def test_lower_participation_needs_more_minutes(self):
+        p,lot=self._sim(30,30,part=.05);self.assertEqual(p['status'],'no_fill')                 # 5% of 10 lots = no whole lot a minute
+    def test_minutes_run_on_into_the_next_window(self):
+        p,lot=self._sim(60,60);self.assertEqual((p['status'],p['units']),('closed',60*lot))     # 45 minutes in the first window + 15 in the next
+        p,lot=self._sim(60,50);self.assertEqual(p['status'],'no_fill')
