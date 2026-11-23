@@ -1421,3 +1421,15 @@ class EntryMinutesV4912(Market):
     def test_minutes_run_on_into_the_next_window(self):
         p,lot=self._sim(60,60);self.assertEqual((p['status'],p['units']),('closed',60*lot))     # 45 minutes in the first window + 15 in the next
         p,lot=self._sim(60,50);self.assertEqual(p['status'],'no_fill')
+
+class EntryLiquidityV4912(Market):
+    """V4.9.12: the entry-liquidity diagnostic reports each window's volume and the whole-lot-per-minute tradable quantity."""
+    def test_windows_and_whole_lot_rounding(self):
+        from nifty_iv.diagnostics import entry_liquidity as el,trade_ledger as tl
+        m=self.build();lot=LotMaster(None).get(self.days[0],'2024-01-11').qty
+        m=self.edit('UPDATE opt_1m SET volume=?',(lot*10-1,))                                   # 10% of a minute is just under one lot
+        bars=self.bars_for(self.days);sim=tl.LedgerSim(m,bars,['G']*len(bars),pcfg(lots=2,entry_bars=2))
+        d=el.diagnose(sim,bars,0,'bull','naked',0)
+        self.assertFalse(d['filled']);self.assertEqual(len(d['windows']),2);w=d['windows'][0]
+        self.assertEqual((w['minutes'],w['minutes_traded'],w['minutes_with_a_lot'],w['tradable_units']),(45,45,0,0))
+        self.assertEqual(w['participation_x_volume'],int(45*(lot*10-1)*.1))                     # ~45 lots of 'volume x participation', none tradable
