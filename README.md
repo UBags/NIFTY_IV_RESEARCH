@@ -2,7 +2,7 @@
 
 **A research system for testing whether a trend-and-swing signal on the NIFTY index can be turned into option-selling strategies, using real minute-by-minute option prices.**
 
-> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_11.md`), and 614 synthetic tests pass.
+> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_11.md`), and 615 synthetic tests pass.
 
 ---
 
@@ -430,7 +430,7 @@ timeline
 
 ```bash
 python -m pip install -e ".[fast,test]"     # package + console scripts; numba (fast) optional
-python -m pytest                             # 614 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
+python -m pytest                             # 615 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
 
 export PGHOST=localhost PGPORT=5432 PGDATABASE=nifty_data PGUSER=postgres
 read -rs -p 'PostgreSQL password: ' PGPASSWORD; echo; export PGPASSWORD

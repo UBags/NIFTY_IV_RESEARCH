@@ -1311,3 +1311,14 @@ class TradeLedgerV4912(GridV491):
         for d in y:
             rs=[r for r in rows if r['strategy']==d['strategy'] and r['year']==d['year']]
             self.assertEqual(d['trades'],len(rs));self.assertEqual(d['net_after_interest_rs'],sum(r['net_after_interest_rs'] for r in rs))
+    def test_ledger_lists_unvalued_trades_and_excludes_them(self):
+        from nifty_iv.diagnostics import trade_ledger as tl;from unittest import mock
+        p,_,_=self._grid();orig=zg.Detail.trades
+        def trades(self_,*a,**k):
+            out=orig(self_,*a,**k)
+            if out:out[0]=dict(out[0],unit=float('nan'))                          # as a trade whose settlement price is missing
+            return out
+        key=('bull','naked',0.,'zone_only_tw2','none','none')
+        with mock.patch.object(zg.Detail,'trades',trades):rows=tl.ledger(str(p),self.op,self.sp,[key],end='2025-01-01',cfg=pcfg())
+        self.assertEqual(rows[0]['status'],'unvalued');self.assertTrue(all(r['status']!='unvalued' for r in rows[1:]))
+        y=tl.years(rows);self.assertEqual(sum(d['trades'] for d in y),len(rows)-1);self.assertEqual(sum(d['unvalued_trades'] for d in y),1)

@@ -104,6 +104,9 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                 if st.startswith('futures') or st=='calendar':raise SystemExit(f'{st}: the ledger handles naked structures only')
                 for x in D.trades(sel,start,end,value_to=end):
                     t=x['signal_bar'];k=x['first_bar']+x['marks_n']-1                    # exit decision bar = the rule's firing row
+                    if not math.isfinite(x['unit']):                                    # no value in the paths file (e.g. settlement price missing): the scans skip it too
+                        rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=x['entry_day'][:4],status='unvalued',signal=f"{bars[t].day} {zs.hhmm(bars[t].end)}",
+                                         entry_first_fill=x['entry_day'],exit_reason=x['reason'],note='no value in the paths file; excluded from totals, as in the scans'));continue
                     sim.cap_log.clear();sim.slice_log.clear();sim.settle_log.clear();sim.memo.clear();rec.clear()
                     pair,why=sim.open_pair(t,side,st,float(off))
                     if pair is None:raise SystemExit(f'replay of {key} signal bar {t} did not fill ({why}); the paths file says it did')
@@ -124,8 +127,10 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                     sl=sim.slice_log;x_first=(sl[0][0],sl[0][1]) if sl else None;x_last=(last_fill[0],last_fill[1]) if last_fill else None
                     exit_px_mkt=X['mkt_notional']/X['qty'] if X['qty'] else None;exit_px_fill=X['fill_notional']/X['qty'] if X['qty'] else None
                     settle_px=sim.settle_log[0][1] if sim.settle_log else None
+                    if not all(map(math.isfinite,(gross,net,E['total'],X['total']))):
+                        raise SystemExit(f"replay of {key} signal bar {t} (entry {pair['day']}) gave a non-finite value: gross {gross}, net {net}, entry charges {E['total']}, exit charges {X['total']}, exit ok={ok}")
                     b=bars[t];bk=bars[k]
-                    rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=eday[:4],
+                    rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=eday[:4],status='open_at_data_end' if open_end else 'closed',
                         signal=f'{b.day} {zs.hhmm(b.end)}',entry_first_fill=f'{e_first[0]} {hm(e_first[1])}' if e_first else '',entry_last_fill=f'{e_last[0]} {hm(e_last[1])}' if e_last else '',
                         option=f"{'PE' if c0[2]=='PE' else 'CE'} {c0[1]:.0f} exp {c0[0]}",index_at_entry=round(pair['entry_index'],1) if math.isfinite(pair['entry_index']) else None,
                         lots=abs(units)//lot,lot_size=lot,units=abs(units),
@@ -144,8 +149,9 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
 
 YEAR_KEYS=('gross_pnl_rs','slippage_rs','brokerage_rs','gst_rs','stt_rs','other_charges_rs','interest_rs','net_pnl_rs','net_after_interest_rs')
 def years(rows,rate=.10):
-    g=collections.defaultdict(list)
-    for r in rows:g[r['strategy'],r['year']].append(r)
+    allrows=rows;g=collections.defaultdict(list)
+    for r in rows:
+        if r['status']!='unvalued':g[r['strategy'],r['year']].append(r)
     out=[]
     for (s,y),rs in sorted(g.items()):
         d=dict(strategy=s,year=y,trades=len(rs),**{k:sum(r[k] for r in rs) for k in YEAR_KEYS})
@@ -153,7 +159,7 @@ def years(rows,rate=.10):
         d['net_pct_of_avg_margin']=round(100*d['net_after_interest_rs']/d['avg_margin_rs'],2) if d['avg_margin_rs'] else None
         my=sum(r['margin_rs']*r['days_held'] for r in rs)/365;d['margin_years']=round(my/d['avg_margin_rs'],3) if d['avg_margin_rs'] else None
         d['net_pct_per_margin_year']=round(100*d['net_after_interest_rs']/my,2) if my else None
-        d['days_held']=sum(r['days_held'] for r in rs);out.append(d)
+        d['days_held']=sum(r['days_held'] for r in rs);d['unvalued_trades']=sum(1 for r in allrows if r['strategy']==s and r['year']==y and r['status']=='unvalued');out.append(d)
     return out
 
 def parse_strategy(s):
@@ -173,8 +179,10 @@ def main(argv=None):
     if not rows:sys.exit('no trades')
     yr=years(rows,a.rate)
     for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr)):
-        with open(name,'w',newline='') as f:w=csv.DictWriter(f,list(data[0]));w.writeheader();w.writerows(data)
-    bad=[r for r in rows if not abs(r['check_rupees'])<=1];opn=sum(r['open_at_data_end'] for r in rows)
+        keys=list(dict.fromkeys(k for r in data for k in r))
+        with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
+    val=[r for r in rows if r['status']!='unvalued'];unv=[r for r in rows if r['status']=='unvalued']
+    bad=[r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
     for s in dict.fromkeys(r['strategy'] for r in rows):
         print(f'\n=== {s} ===')
@@ -183,8 +191,9 @@ def main(argv=None):
             if d['strategy']!=s:continue
             print(f"{d['year']:<6}{d['trades']:>7}{d['gross_pnl_rs']:>20,.0f}{rs(d['slippage_rs'])}{rs(d['brokerage_rs'])}{d['gst_rs']:>10,.0f}{d['stt_rs']:>10,.0f}{d['other_charges_rs']:>10,.0f}"
                   f"{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{rs(d['avg_margin_rs'])}{d['net_pct_of_avg_margin']:>13.1f}%")
-    print(f"\n{len(rows)} trades ({opn} still open at the data end, valued at their mark); replay check (net cash vs paths file): {len(rows)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
+    print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(unv)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
     print(f'-> {a.out}_trades.csv, {a.out}_years.csv  (net = after slippage and all charges; % avg margin = net after interest / average margin per trade)')
+    for r in unv:print(f"  unvalued: {r['strategy']} signal {r['signal']} entry {r['entry_first_fill']} ({r['exit_reason']})")
     if bad:sys.exit(1)
 
 if __name__=='__main__':main()

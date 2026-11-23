@@ -20,4 +20,4 @@ stamp, settlements), margin from the strategy_spec table and interest at --rate 
   end): all 20 equal the paths file; the identity holds to the rupee.
 
 No grid or portfolio digest covers the changed files: existing zone_grid / portfolio outputs stay valid.
-`python -m pytest`: 614 pass (numpy and numba paths).
+`python -m pytest`: 615 pass (numpy and numba paths).
