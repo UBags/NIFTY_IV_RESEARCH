@@ -1391,3 +1391,14 @@ class ReinvestSimV4912(unittest.TestCase):
         dec31=[r for r in daily if r['day']=='2023-12-31'][0];jan1=[r for r in daily if r['day']=='2024-01-01'][0]
         self.assertLess(abs(jan1['wealth_rs']-dec31['wealth_rs']),dec31['fd_rs']*.0005)     # tax accrued in wealth, so paying it is no fall
         self.assertEqual(rs._taxable(-5e4,2e5,0),1.5e5);self.assertEqual(rs._taxable(1e5,2e4,3e4),9e4);self.assertEqual(rs._taxable(-3e5,2e5,0),0.)
+    def test_leverage_sets_the_line_and_the_size(self):
+        from nifty_iv.diagnostics import reinvest_sim as rs
+        import datetime as dt,os,csv
+        d=tempfile.mkdtemp();p=os.path.join(d,'t_trades.csv')
+        with open(p,'w') as f:f.write('status,strategy,side,entry_day,exit_day,margin_rs,net_pnl_rs\nclosed,s,bull,2023-03-01,2023-03-03,2500000,100000\n')
+        out=os.path.join(d,'r')
+        rs.main([p,'--leverage','4.0','--leverage-interest','0.12','--tax-rate','0','--fd-rate','0','--holidays','','--start','2023-01-02','--end','2023-12-31','--out',out])
+        S=json.load(open(out+'_summary.json'));Y=list(csv.DictReader(open(out+'_years.csv')))
+        self.assertEqual(S['settings']['line'],1.2e7);self.assertEqual(S['settings']['line_rate'],.12)
+        self.assertAlmostEqual(float(Y[0]['scale']),4.8);self.assertEqual(int(Y[0]['trading_pnl_rs']),480000)
+        self.assertAlmostEqual(int(Y[0]['line_interest_rs']),round(2.5e6*4.8*.12*5/365),delta=20)  # entry Wed 1 Mar to money back Mon 6 Mar: 5 days (+ interest on accrued interest)
