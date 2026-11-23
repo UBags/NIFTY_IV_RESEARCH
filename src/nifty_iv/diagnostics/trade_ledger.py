@@ -220,17 +220,18 @@ def main(argv=None):
                     'Signals and exit decision bars stay those of the paths file; an entry that cannot fill at the larger size is listed and excluded')
     ap.add_argument('--max-participation',type=float,help='replay with this share of each minute\'s volume (default: the paths file\'s, 0.20 unless built otherwise)')
     ap.add_argument('--entry-minutes',type=int,help='replay with entries limited to this many minutes after the signal bar\'s close (default: the paths file\'s; 0 = no limit)')
+    ap.add_argument('--entry-bars',type=int,help='replay with entries allowed this many 45-minute windows (default: the paths file\'s, 3); raise it with --entry-minutes above 135')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
     rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction,
-              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes))
+              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars))
     if not rows:sys.exit('no trades')
     rows.sort(key=lambda r:(r.get('entry_first_fill') or '',r['strategy']))                      # one time line across strategies
     yr=years(rows,a.rate)
     for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr),(f'{a.out}_brief.csv',[brief(r) for r in rows])):
         keys=list(dict.fromkeys(k for r in data for k in r))
         with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
-    resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None
+    resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None or a.entry_bars is not None
     val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];skip=[r for r in rows if r not in val]
     bad=[] if resized else [r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
@@ -253,7 +254,7 @@ def main(argv=None):
     if resized:
         sp=sum(1 for r in val if r.get('exit_spilled_bars'))
         how=(f'{a.target_fraction:g} x the margin-table lots' if a.target_fraction is not None else "the paths file's size")
-        how+=(f', participation {a.max_participation:g}' if a.max_participation is not None else '')+(f', entry minutes {a.entry_minutes}' if a.entry_minutes is not None else '')
+        how+=(f', participation {a.max_participation:g}' if a.max_participation is not None else '')+(f', entry minutes {a.entry_minutes}' if a.entry_minutes is not None else '')+(f', entry windows {a.entry_bars}' if a.entry_bars is not None else '')
         print(f"\nReplayed at {how}: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
               f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete. "
               "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")
