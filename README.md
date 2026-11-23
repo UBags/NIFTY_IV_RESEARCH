@@ -2,7 +2,7 @@
 
 **A research system for testing whether a trend-and-swing signal on the NIFTY index can be turned into option-selling strategies, using real minute-by-minute option prices.**
 
-> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_11.md`), and 620 synthetic tests pass.
+> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_12.md`), and 639 synthetic tests pass.
 
 ---
 
@@ -269,9 +269,9 @@ sequenceDiagram
     participant ST as Settlement
 
     S->>X: side, structure, level, target lots
-    loop up to 3 bar windows
+    loop within --entry-minutes (default 30) and up to --entry-bars windows (default 3)
         X->>M: next minutes' volume, all legs
-        M-->>X: tradable qty = min over legs (≤ 20% of minute volume)
+        M-->>X: tradable qty = min over legs (≤ --max-participation of minute volume, default 20%)
         X->>X: accumulate whole matched lots
     end
     alt full size reached
@@ -291,6 +291,17 @@ sequenceDiagram
 ```
 
 A path is simulated **once per (signal bar × side × structure × level)** and shared by every configuration that fires on that bar. That reuse is what makes it feasible to evaluate hundreds of millions of rule combinations.
+
+**Entry window (V4.9.12).** A first entry must reach full size within `--entry-minutes` trading minutes of the signal bar's close (default 30). If the session ends first, the count continues into the next session's opening minutes, and only while the zone holds. Paths files built before V4.9.12 have no minute limit. The settings being studied now are 25% participation and a 225-minute window; pass them explicitly (`--max-participation 0.25 --entry-minutes 225 --entry-bars 6`) when rebuilding.
+
+**Exits in the trade ledger (V4.9.12).** The grid and the scans decide every exit at a 45-minute bar close. `nifty-diag-trade-ledger` replays chosen trades with two extra options:
+
+| Option | Default | Effect |
+|---|---|---|
+| `--intrabar-stop` | `mloss7.5` | A protective stop resting at the broker, on top of the strategy's own rules. It is checked on every minute at the minute's worst price for the trade (option high for a short leg; index low on a bull trade, high on a bear trade) and fills from that same minute. `none` turns it off and reproduces bar-close-only results |
+| `--exit-at` | `next-bar` | `same-bar` also checks the strategy's price-based rules (atr, eatr, pct, epct, pts, target, tpct, mloss, loss, tp, mult) on every minute's close, filling from the following minute. Time, trailing, zone-change and expiry exits stay at the bar close |
+
+The ledger can also replay at another size or with other fill settings (`--target-fraction`, `--max-participation`, `--entry-minutes`, `--entry-bars`). In every replay, the signals, the one-position sequencing and the bar-close exit decisions still come from the paths file. A trade that can no longer fill, or that exits earlier, does not free the slot for a later signal; only a paths rebuild models that.
 
 ---
 
@@ -412,6 +423,7 @@ timeline
     V4.9.8 : margin-based stops (mloss) : dd_cutoffs, dd_recovery, dd_bins
     V4.9.9–10 : zone_diagnose, pair_exits : low-drawdown pairs = beta + fitted exits, failed 2025–26
     V4.9.11 : strategy_scan with worst-bar-mark trade drawdown : 2 strategies pass both periods
+    V4.9.12 : equity_dd_scan, trade_ledger, stop_compare, reinvest_sim, entry_liquidity : entry window, intrabar stop, --exit-at
 ```
 
 | Finding | Detail |
@@ -420,7 +432,11 @@ timeline
 | Portfolio pairs | No green × red pair passes the drawdown gate |
 | `strategy_scan` | 19,808 combinations pass 13 / 10 / 3 on 2022–24. The long side fails 2026 H1 almost entirely |
 | **Survivors** | 6 combinations pass both periods, which amounts to **2 strategies**: **bear naked level −2**, `N5_k0.25_m12_j{1.0,1.25}_tw5`, stop `eatr{30,45,60}×0.25`, profit `none` / `ptime5` |
-| Next step | Write the frozen spec and forward-test it on data after June 2026 |
+| `equity_dd_scan` (V4.9.12) | Best single strategy per side under 15 / 17.5 / 20% equity-drawdown caps. The green futures picks collapse in 2025–26; the naked picks hold up |
+| `stop_compare` (V4.9.12) | 50 alternative stops on fixed entries. Tight stops (mloss1–3, atr15x1, pct/epct0.5) lead for both sides; no switch is statistically supported |
+| **Current pair** (V4.9.12) | Green naked −1 `N3_k1.25_m8_j1.5_tw2` ptime5 / **atr15x1**; red naked −2 `N5_k0.25_m12_j0.25_tw5` ptime7 / **eatr30x1.5**. Full ₹25 L each; they never hold positions at the same time. Ledger replay at 25% participation and a 225-minute window, after slippage, charges and 10% interest on margin, 2021-06 to 2026-06: ₹78.8 L net with bar-close exits only, ₹80.4 L with the `mloss7.5` intrabar stop. Chosen on the same period, 2025–26 included: not forward evidence |
+| Execution findings | Minute-checked strategy stops (`--exit-at same-bar`) do worse (₹65.2 L): brief spikes turn winners into losers. Red's deep-ITM calls are thin: at full size 5 entries fail at 20% participation and a 135-minute window |
+| Next step | Freeze the current pair and forward-test it on data after June 2026; a paths rebuild at 25% / 225 minutes gives the exact sequencing |
 
 ---
 
@@ -430,7 +446,7 @@ timeline
 
 ```bash
 python -m pip install -e ".[fast,test]"     # package + console scripts; numba (fast) optional
-python -m pytest                             # 620 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
+python -m pytest                             # 639 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
 
 export PGHOST=localhost PGPORT=5432 PGDATABASE=nifty_data PGUSER=postgres
 read -rs -p 'PostgreSQL password: ' PGPASSWORD; echo; export PGPASSWORD
@@ -463,10 +479,21 @@ nifty-diag-strategy-scan --paths zone_paths_levels.sqlite --holidays ../config/n
 nifty-diag-dd-cutoffs    --paths zone_paths_levels.sqlite        # touches the 2025–26 period
 nifty-diag-equity-dd-scan --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt \
     --caps 0.15,0.175,0.20 --min-year 0.07 --out equity_dd_scan.csv   # best single green / red per drawdown cap
+nifty-diag-stop-compare --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt \
+    --strategy bull,naked,-1,N3_k1.25_m8_j1.5_tw2,ptime5,atr15x1 --out stop_compare.csv   # 50 alternative stops on fixed entries
+
+# every trade's fills, costs, margin and interest; current pair, full size, 25% / 225-minute fills, default intrabar stop mloss7.5
 nifty-diag-trade-ledger --paths zone_paths_levels.sqlite --options zone_options_levels.sqlite --spot zone_spot.sqlite \
-    --holidays ../config/nse_holidays.txt --strategy bear,naked,-2,N5_k0.25_m12_j0.25_tw5,ptime7,eatr30x1.5   # every trade's fills, costs, margin, interest
+    --holidays ../config/nse_holidays.txt --target-fraction 1 \
+    --max-participation 0.25 --entry-minutes 225 --entry-bars 6 \
+    --strategy bull,naked,-1,N3_k1.25_m8_j1.5_tw2,ptime5,atr15x1 \
+    --strategy bear,naked,-2,N5_k0.25_m12_j0.25_tw5,ptime7,eatr30x1.5 --out ledger
+nifty-diag-entry-liquidity --paths zone_paths_levels.sqlite --options zone_options_levels.sqlite --spot zone_spot.sqlite \
+    --ledger ledger_trades.csv --target-fraction 1   # minute volume per entry window: why an entry filled or not
 nifty-diag-reinvest ledger_trades.csv --tax-rate 0.35 --leverage 0.8 --leverage-interest 0.10 --out reinvest   # FD-backed line, year-end reinvestment, tax: yearly table + ratios
 ```
+
+Every command prints its full command line, with all defaults filled in, before it runs (to stderr, so it lands in `2>&1 | tee` logs). `--help` lists every argument with its meaning, accepted values and default.
 
 ### Holdout (once, when selection is final)
 
@@ -487,7 +514,7 @@ flowchart LR
     subgraph PKG["src/nifty_iv"]
         direction TB
         subgraph CORE["core"]
-            c1[strategy_spec · contract_specs · lineage]
+            c1[strategy_spec · contract_specs · lineage · cli]
         end
         subgraph DATA["data"]
             d1[import_postgres · inspect_parquet]
@@ -500,8 +527,9 @@ flowchart LR
             z4[legacy: futures · report · summary]
         end
         subgraph DIAG["diagnostics"]
-            g1[strategy_scan · equity_dd_scan · trade_ledger · dd_cutoffs · dd_bins · dd_recovery]
-            g2[zone_diagnose · pair_exits]
+            g1[strategy_scan · equity_dd_scan · trade_ledger · stop_compare]
+            g2[reinvest_sim · entry_liquidity · dd_cutoffs · dd_bins · dd_recovery]
+            g3[zone_diagnose · pair_exits]
         end
         subgraph IV["ivcal (dormant pipeline)"]
             i1[quant_v2/v3/fast_v3 · candidate_core · settlements · stats]
@@ -525,7 +553,7 @@ flowchart LR
 | `config/` | inputs: `nse_holidays.txt` |
 | `pine/` | `INDEX_v15_zone_swing.pine` (TradingView source of the signal) |
 | `scripts/` | `smoke_v3.py` (synthetic IV-pipeline run), `check_import_psql.sh`, `cleanup_outputs.sh` |
-| `docs/` | `guides/` (install, import, V2/V4 guides) · `notes/` (V4.x release notes) · `validation/` · `research/` (reviews, pilot results) · `CHANGES_V4.md` · `CODEMAP_V4_9_11.md` · `MODULE_MAP.md` |
+| `docs/` | `guides/` (install, import, V2/V4 guides) · `notes/` (V4.x release notes) · `validation/` · `research/` (reviews, pilot results) · `CHANGES_V4.md` · `CODEMAP_V4_9_12.md` (current; `CODEMAP_V4_9_11.md` kept) · `MODULE_MAP.md` |
 | `data/` | not tracked: Parquet tree (`data/NIFTY_Data`) |
 | `runs/` | not tracked: every run output |
 | `archive/` | superseded code (`legacy_v1/`, `v2_tools/`, `scripts/`) |
