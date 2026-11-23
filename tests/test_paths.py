@@ -1245,3 +1245,50 @@ class StrategyScanMarksV4911(MarginStopV498):
         self.assertAlmostEqual(float(rows[('none','none')]['worst_trade_pct_judged']),ref['worst']['2024']/2.5e6,5)
         hit=[x for (pr,stp),x in rows.items() if stp=='time1']
         if hit:self.assertGreater(float(hit[0]['worst_trade_pct_judged']),-90000/2.5e6)   # an early exit never sees the -90K bar
+
+class EquityDDScanV4912(GridV491):
+    """V4.9.12: single-strategy equity drawdown scan = trade-by-trade replay (closed P&L plus the open trade's bar-close marks)."""
+    def test_kernel_drawdown_equals_brute_force_on_random_trades(self):
+        from nifty_iv.diagnostics import equity_dd_scan as eq
+        rnd=np.random.default_rng(3)
+        for _ in range(200):
+            T=int(rnd.integers(1,8));marks=[np.cumsum(rnd.normal(0,1,int(rnd.integers(1,12)))) for _ in range(T)];fin=[float(m[-1]+rnd.normal()) for m in marks]
+            eqv=pk=dd=0.                                                                   # brute force: every mark, then the exit, of each trade in turn
+            for m,f in zip(marks,fin):
+                for v in list(m)+[f]:e=eqv+v;pk=max(pk,e);dd=max(dd,pk-e)
+                eqv+=f
+            LO=np.array([[min(m.min(),f,0.)] for m,f in zip(marks,fin)]);HI=np.array([[max(m.max(),f,0.)] for m,f in zip(marks,fin)])
+            DI=np.array([[max(max(np.maximum.accumulate(np.maximum(m,0.))-m),max(m.max(),0.)-f,0.)] for m,f in zip(marks,fin)])
+            ts=np.arange(T,dtype=np.int64);s,n,D=eq._dd_kernel_py(ts,np.array([0,T]),np.arange(T,dtype=np.int64),np.arange(T,dtype=np.int64),np.full(T,-1),ts.reshape(T,1),
+                                                               np.array(fin).reshape(T,1),LO,HI,DI,np.zeros(T,np.int64),np.ones(T,np.bool_),1,1,1)
+            self.assertAlmostEqual(D[0,0,0],dd,9);self.assertAlmostEqual(s[0,0,0],sum(fin),9)
+    def test_scan_matches_replay(self):
+        import io,contextlib,csv as _csv;from nifty_iv.diagnostics import equity_dd_scan as eq
+        p,_,_=self._grid();out=Path(tempfile.mkdtemp())
+        with contextlib.redirect_stdout(io.StringIO()) as buf:
+            eq.main(['--paths',str(p),'--judge-years','2024','--min-trades','1','--workers','1','--no-compound','--min-year','-10','--caps','0.5,1','--out',str(out/'e.csv')])
+        rows=list(_csv.DictReader(open(out/'e.csv')));self.assertTrue(rows);self.assertIn('GREEN (bull)',buf.getvalue())
+        keys=[(r['side'],r['structure'],float(r['level']),r['config'],r['profit'],r['stop']) for r in rows[:40]]
+        ref=eq.evaluate(keys,str(p),'2025-01-01')
+        for r,k in zip(rows[:40],keys):
+            self.assertAlmostEqual(float(r['ret_2024']),ref[k]['years'].get('2024',0.)/2.5e6,4)
+            self.assertAlmostEqual(float(r['max_dd_rupees']),ref[k]['max_dd'],delta=1.)
+        self.assertTrue(any(float(r['max_dd_rupees'])>0 for r in rows))
+        with contextlib.redirect_stdout(io.StringIO()):
+            eq.main(['--paths',str(p),'--judge-years','2024','--min-trades','1','--workers','1','--no-compound','--min-year','-10','--caps','1e-9','--out',str(out/'z.csv')])
+        z=list(_csv.DictReader(open(out/'z.csv'))) if (out/'z.csv').exists() else []
+        self.assertTrue(all(float(r['max_dd_rupees'])<=0.01 for r in z));self.assertLess(len(z),len(rows))
+
+class EquityDDMarksV4912(MarginStopV498):
+    def test_drawdown_sees_marks_inside_a_trade(self):
+        import io,contextlib,csv as _csv;from nifty_iv.diagnostics import equity_dd_scan as eq
+        db=self._db();db.execute("INSERT INTO signals VALUES('zone_only_tw2','bull',0)")
+        fb,eb,units,blob=db.execute('SELECT first_bar,end_bar,units,data FROM paths').fetchone();n=eb-fb+1
+        r={k:np.array(v) for k,v in zp.unpack(blob,n).items()};mark=np.zeros(n);mark[2]=30000.;mark[6]=-90000.;r['mark']=mark
+        db.execute('UPDATE paths SET data=?',(zp.pack(r),));db.commit()
+        f=Path(self.tmp.name)/'m.sqlite';d=sqlite3.connect(f);db.backup(d);d.close()
+        with contextlib.redirect_stdout(io.StringIO()):eq.main(['--paths',str(f),'--judge-years','2024','--min-trades','1','--workers','1','--no-compound','--min-year','-10','--caps','1','--out',str(Path(self.tmp.name)/'e.csv')])
+        rows={(x['profit'],x['stop']):x for x in _csv.DictReader(open(Path(self.tmp.name)/'e.csv'))}
+        k=('bull','naked',0.,'zone_only_tw2','none','none');ref=eq.evaluate([k],str(f),'2025-01-01')[k]
+        self.assertAlmostEqual(float(rows[('none','none')]['max_dd_rupees']),ref['max_dd'],delta=1.)
+        self.assertGreaterEqual(float(rows[('none','none')]['max_dd_rupees']),120000-1)   # +30K high then a -90K mark: at least 120K from the peak

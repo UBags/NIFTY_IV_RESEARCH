@@ -2,7 +2,7 @@
 
 **A research system for testing whether a trend-and-swing signal on the NIFTY index can be turned into option-selling strategies, using real minute-by-minute option prices.**
 
-> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.11-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_11.md`), and 602 synthetic tests pass.
+> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_11.md`), and 611 synthetic tests pass.
 
 ---
 
@@ -430,7 +430,7 @@ timeline
 
 ```bash
 python -m pip install -e ".[fast,test]"     # package + console scripts; numba (fast) optional
-python -m pytest                             # 602 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
+python -m pytest                             # 611 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
 
 export PGHOST=localhost PGPORT=5432 PGDATABASE=nifty_data PGUSER=postgres
 read -rs -p 'PostgreSQL password: ' PGPASSWORD; echo; export PGPASSWORD
@@ -461,6 +461,8 @@ nifty-zone-portfolio --grid zone_grid_levels --paths zone_paths_levels.sqlite \
 nifty-diag-strategy-scan --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt \
     --min-mean 0.13 --min-year 0.10 --max-trade-dd 0.03 --judge-years 2022,2023,2024 --out strategy_scan.csv
 nifty-diag-dd-cutoffs    --paths zone_paths_levels.sqlite        # touches the 2025–26 period
+nifty-diag-equity-dd-scan --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt \
+    --caps 0.15,0.175,0.20 --min-year 0.07 --out equity_dd_scan.csv   # best single green / red per drawdown cap
 ```
 
 ### Holdout (once, when selection is final)
@@ -495,7 +497,7 @@ flowchart LR
             z4[legacy: futures · report · summary]
         end
         subgraph DIAG["diagnostics"]
-            g1[strategy_scan · dd_cutoffs · dd_bins · dd_recovery]
+            g1[strategy_scan · equity_dd_scan · dd_cutoffs · dd_bins · dd_recovery]
             g2[zone_diagnose · pair_exits]
         end
         subgraph IV["ivcal (dormant pipeline)"]

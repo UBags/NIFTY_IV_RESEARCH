@@ -46,14 +46,16 @@ def _scan_kernel_py(ts,cptr,cbar,pix,gx,XB,V,M,yi,C,R,Y):
     return s,n,w
 _scan_kernel=zg._nb.njit(parallel=True)(_scan_kernel_py) if zg.HAVE_NUMBA else _scan_kernel_py
 
-def scan_group(g):
-    c=zg._CTX;side,st,off=g;t0=time.time()
+def prepare_group(g):
+    """Shared by the scans: the group's filled paths as a rule Batch, and each configuration's signal bars in time order (CSR:
+    cptr / cbar), with the path index (pix, -1 = no path) and data-gap occupancy (gx) of each signal bar. None + reason if skipped."""
+    c=zg._CTX;side,st,off=g
     if zg._nb is not None:zg._nb.set_num_threads(max(1,min(zg._nb.config.NUMBA_NUM_THREADS,(os.cpu_count() or 1)//max(1,c['workers']))))
     db=sqlite3.connect(f'file:{c["paths"]}?mode=ro',uri=True)
     stat=zg.fill_stats(db,side,st,off)
-    if not zg.testable(stat,c['min_fill_rate']):db.close();return dict(group=g,skipped=f"fill rate {stat.get('fill_rate')}",rows=[])
+    if not zg.testable(stat,c['min_fill_rate']):db.close();return None,f"fill rate {stat.get('fill_rate')}"
     paths=zg.load_paths(db,side,st,off);filled=[p for p in paths.values() if p is not None and p['entry_day']<c['end']]
-    if not filled:db.close();return dict(group=g,skipped='no trades',rows=[])
+    if not filled:db.close();return None,'no trades'
     gaps=zg.gap_occupancy(db,side,st,off,c['gap_policy']);db.close()
     b=zr.Batch(filled,c['bars'],st);years=c['years'];yi=np.array([years.index(p['entry_day'][:4]) for p in filled],np.int64)
     configs=c['configs'];by_bar=collections.defaultdict(list)
@@ -64,6 +66,13 @@ def scan_group(g):
     bar_of=np.repeat(np.arange(len(ts)),sizes);order=np.argsort(cfg,kind='stable');cbar=bar_of[order].astype(np.int64)
     C=len(configs);cptr=np.zeros(C+1,np.int64);np.add.at(cptr,cfg+1,1);cptr=np.cumsum(cptr)
     idx={p['signal_bar']:i for i,p in enumerate(filled)};pix=np.array([idx.get(int(t),-1) for t in ts],np.int64);gx=np.array([gaps.get(int(t),-1) for t in ts],np.int64)
+    return dict(stat=stat,filled=filled,b=b,yi=yi,configs=configs,ts=ts,cptr=cptr,cbar=cbar,pix=pix,gx=gx,C=C,years=years),None
+
+def scan_group(g):
+    c=zg._CTX;side,st,off=g;t0=time.time()
+    G,why=prepare_group(g)
+    if G is None:return dict(group=g,skipped=why,rows=[])
+    stat,filled,b,yi,configs,ts,cptr,cbar,pix,gx,C,years=(G[k] for k in ('stat','filled','b','yi','configs','ts','cptr','cbar','pix','gx','C','years'))
     mk=np.where(b.valid&np.isfinite(b.markpu),b.markpu,np.inf);cm=np.minimum.accumulate(mk,1)          # running worst mark per unit
     P=zr.profit_rules(st);chunks=zg.stop_chunks(zr.stop_rules(st)+(zr.compound_rules(st) if c['compound'] else []))
     PC=[x for x in zr.compound_profits(st) if x in P];pc_idx=np.array([P.index(x) for x in PC]);FP=zr.evaluate(P,b);ar=np.arange(b.Np)[None,:]

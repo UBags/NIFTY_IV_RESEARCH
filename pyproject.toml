@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nifty-iv-research"
-version = "4.9.11+research"   # PEP 440 form of src/nifty_iv/VERSION.txt (the release string written into run metadata)
+version = "4.9.12+research"   # PEP 440 form of src/nifty_iv/VERSION.txt (the release string written into run metadata)
 description = "NIFTY zone + swing option-selling research and relative-IV calendar research (research software, not a trading system)"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -24,6 +24,7 @@ nifty-data-research-cache = "nifty_iv.data.research_cache:main"
 nifty-diag-dd-bins = "nifty_iv.diagnostics.dd_bins:main"
 nifty-diag-dd-cutoffs = "nifty_iv.diagnostics.dd_cutoffs:main"
 nifty-diag-dd-recovery = "nifty_iv.diagnostics.dd_recovery:main"
+nifty-diag-equity-dd-scan = "nifty_iv.diagnostics.equity_dd_scan:main"
 nifty-diag-pair-exits = "nifty_iv.diagnostics.pair_exits:main"
 nifty-diag-strategy-scan = "nifty_iv.diagnostics.strategy_scan:main"
 nifty-diag-zone-diagnose = "nifty_iv.diagnostics.zone_diagnose:main"
