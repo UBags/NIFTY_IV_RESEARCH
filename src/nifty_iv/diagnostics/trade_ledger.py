@@ -342,7 +342,7 @@ def main(argv=None):
         with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
     resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None or a.entry_bars is not None or a.exit_at=='same-bar'
     val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];skip=[r for r in rows if r not in val]
-    bad=[] if resized else [r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
+    bad=[] if resized else [r for r in val if r['check_rupees'] is not None and not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
     for s in dict.fromkeys(r['strategy'] for r in rows):
         print(f'\n=== {s} ===')
@@ -369,7 +369,8 @@ def main(argv=None):
               f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete{f'; {ib} exits triggered intrabar' if a.exit_at=='same-bar' else ''}. "
               "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")
     else:
-        print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(skip)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
+        nchk=sum(r['check_rupees'] is not None for r in val)
+        print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(skip)} unvalued (excluded, as in the scans); replay check (net cash vs paths file, trades without an intrabar exit): {nchk-len(bad)} of {nchk} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
     if a.intrabar_stop not in (None,'','none'):
         hit=[r for r in val if str(r.get('exit_reason','')).startswith('intrabar_stop:')]
         print(f"intrabar stop {a.intrabar_stop}: fired on {len(hit)} of {len(val)} trades" + (f" (net {sum(r['net_pnl_rs'] for r in hit):,.0f}; dates {', '.join(r['exit_decision'][:16] for r in hit[:8])}{' ...' if len(hit)>8 else ''})" if hit else ''))

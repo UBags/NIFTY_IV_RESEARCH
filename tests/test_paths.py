@@ -1489,6 +1489,16 @@ class ExitAtSameBarV4912(GridV491):
                     self.assertLessEqual(b['exit_first_fill'],a['exit_first_fill']);self.assertIsNone(b['check_rupees'])
                 else:self.assertEqual(b['net_pnl_rs'],a['net_pnl_rs']);self.assertLessEqual(abs(b['check_rupees']),1)
         self.assertTrue(any(r['exit_reason'].startswith('intrabar_stop:') for r in tl.ledger(str(p),self.op,self.sp,keys,end='2025-01-01',cfg=pcfg(),intrabar_stop='mloss0.01')))       # the synthetic premium only decays, so a mult stop never fires
+    def test_command_line_end_to_end_with_a_firing_intrabar_stop(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        import io,contextlib,os
+        p,_,_=self._grid();out=os.path.join(self.tmp.name,'cli_ledger');buf=io.StringIO()
+        from unittest import mock
+        with contextlib.redirect_stdout(buf),contextlib.redirect_stderr(buf),mock.patch.object(tl,'config_from_meta',lambda db:pcfg()):
+            tl.main(['--paths',str(p),'--options',str(self.op),'--spot',str(self.sp),'--strategy','bull,naked,0,zone_only_tw2,none,none',
+                     '--strategy','bear,naked,0,zone_only_tw2,none,none','--end','2025-01-01','--intrabar-stop','mloss0.01','--out',out])
+        txt=buf.getvalue();self.assertIn('command: ',txt);self.assertIn('--intrabar-stop mloss0.01',txt);self.assertRegex(txt,r'intrabar stop mloss0.01: fired on [1-9]')
+        self.assertTrue(os.path.exists(out+'_trades.csv'))
 
 class CliV4912(unittest.TestCase):
     """V4.9.12 (user): every command prints its full command line with defaults, and --help lists every argument."""
