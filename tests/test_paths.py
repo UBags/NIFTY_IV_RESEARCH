@@ -1364,3 +1364,30 @@ class StopCompareV4912(GridV491):
         self.assertEqual(m['trades'],3);self.assertAlmostEqual(m['win_ratio'],.667,3);self.assertEqual(m['profit_factor'],5.0);self.assertEqual(m['payoff'],2.5)
         self.assertAlmostEqual(m['max_dd'],.05);self.assertEqual(m['net_rs'],200)
         self.assertEqual(sc.metrics([dict(entry='2024-01-01',exit='2024-01-02',net=10.)],1000.)['calmar'],float('inf'))
+
+class ReinvestSimV4912(unittest.TestCase):
+    """V4.9.12: year-end reinvestment with an FD-backed line and tax; hand-checkable cases."""
+    def _sim(self,trades,**k):
+        from nifty_iv.diagnostics import reinvest_sim as rs
+        import datetime as dt
+        T=[dict(strategy='s',side='bull',entry=dt.date.fromisoformat(e),exit=dt.date.fromisoformat(x),ret=rs.next_trading_day(dt.date.fromisoformat(x),set()),margin=m,pnl=p) for e,x,m,p in trades]
+        return rs,rs.simulate(T,dt.date(2023,1,2),dt.date(2024,12,31),fd_rate=0.,line_rate=0.,**k)
+    def test_profit_goes_to_fd_and_raises_the_line_after_tax(self):
+        rs,(Y,daily,info)=self._sim([('2023-03-01','2023-03-03',2.5e6,1e6),('2024-03-01','2024-03-04',2.5e6,1e6)],tax_rate=.3)
+        self.assertAlmostEqual(Y[0]['tax_rs'],3e5);self.assertAlmostEqual(Y[0]['to_new_fd_rs'],7e5)
+        self.assertAlmostEqual(Y[1]['line_rs'],2.5e6+.8*7e5);self.assertAlmostEqual(Y[1]['scale'],Y[1]['line_rs']/2.5e6)
+        self.assertAlmostEqual(Y[1]['trading_pnl_rs'],1e6*Y[1]['scale'])                     # second-year trade scaled to the larger line
+        self.assertAlmostEqual(info['final_wealth_rs'],3e6+7e5+.7*1e6*Y[1]['scale'])
+    def test_loss_is_paid_in_and_carried_forward_against_business_income(self):
+        rs,(Y,daily,info)=self._sim([('2023-03-01','2023-03-03',2.5e6,-4e5),('2024-03-01','2024-03-04',2.5e6,1e6)],tax_rate=.35)
+        self.assertEqual(Y[0]['tax_rs'],0);self.assertAlmostEqual(Y[0]['new_capital_rs'],4e5);self.assertAlmostEqual(Y[0]['carried_forward_rs'],4e5)
+        self.assertAlmostEqual(Y[1]['taxable_income_rs'],6e5);self.assertAlmostEqual(Y[1]['tax_rs'],.35*6e5);self.assertAlmostEqual(Y[1]['carried_forward_rs'],0)
+        self.assertAlmostEqual(info['contributed_rs'],3e6+4e5)
+    def test_business_loss_sets_off_fd_interest_and_wealth_is_continuous_at_year_end(self):
+        from nifty_iv.diagnostics import reinvest_sim as rs
+        import datetime as dt
+        T=[dict(strategy='s',side='bull',entry=dt.date(2023,3,1),exit=dt.date(2023,3,3),ret=dt.date(2023,3,6),margin=2.5e6,pnl=1e6)]
+        Y,daily,info=rs.simulate(T,dt.date(2023,1,2),dt.date(2024,6,30),fd_rate=.07,line_rate=0.,tax_rate=.35)
+        dec31=[r for r in daily if r['day']=='2023-12-31'][0];jan1=[r for r in daily if r['day']=='2024-01-01'][0]
+        self.assertLess(abs(jan1['wealth_rs']-dec31['wealth_rs']),dec31['fd_rs']*.0005)     # tax accrued in wealth, so paying it is no fall
+        self.assertEqual(rs._taxable(-5e4,2e5,0),1.5e5);self.assertEqual(rs._taxable(1e5,2e4,3e4),9e4);self.assertEqual(rs._taxable(-3e5,2e5,0),0.)

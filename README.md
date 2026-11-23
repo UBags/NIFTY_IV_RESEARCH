@@ -465,6 +465,7 @@ nifty-diag-equity-dd-scan --paths zone_paths_levels.sqlite --holidays ../config/
     --caps 0.15,0.175,0.20 --min-year 0.07 --out equity_dd_scan.csv   # best single green / red per drawdown cap
 nifty-diag-trade-ledger --paths zone_paths_levels.sqlite --options zone_options_levels.sqlite --spot zone_spot.sqlite \
     --holidays ../config/nse_holidays.txt --strategy bear,naked,-2,N5_k0.25_m12_j0.25_tw5,ptime7,eatr30x1.5   # every trade's fills, costs, margin, interest
+nifty-diag-reinvest ledger_trades.csv --tax-rate 0.35 --out reinvest   # FD-backed line, year-end reinvestment, tax: yearly table + ratios
 ```
 
 ### Holdout (once, when selection is final)
