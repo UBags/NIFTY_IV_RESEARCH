@@ -1433,3 +1433,38 @@ class EntryLiquidityV4912(Market):
         self.assertFalse(d['filled']);self.assertEqual(len(d['windows']),2);w=d['windows'][0]
         self.assertEqual((w['minutes'],w['minutes_traded'],w['minutes_with_a_lot'],w['tradable_units']),(45,45,0,0))
         self.assertEqual(w['participation_x_volume'],int(45*(lot*10-1)*.1))                     # ~45 lots of 'volume x participation', none tradable
+
+class ExitAtSameBarV4912(GridV491):
+    """V4.9.12 (user): --exit-at same-bar checks price rules on every minute's close; the exit then fills from the next minute."""
+    def test_same_bar_exits_no_later_and_add_up(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        p,_,_=self._grid();keys=[('bull','naked',0.,'zone_only_tw2','none',s) for s in ('pct0.25','pts50','mloss1')]+[(sd,'naked',0.,'zone_only_tw2','tpct0.05','atr15x0.1') for sd in ('bull','bear')]
+        nb=tl.ledger(str(p),self.op,self.sp,keys,end='2025-01-01',cfg=pcfg())
+        sb=tl.ledger(str(p),self.op,self.sp,keys,end='2025-01-01',cfg=pcfg(),exit_at='same-bar')
+        self.assertEqual([(r['strategy'],r['entry_first_fill']) for r in nb],[(r['strategy'],r['entry_first_fill']) for r in sb])
+        for a,b in zip(nb,sb):
+            if a['status']!='closed':continue
+            self.assertLessEqual(abs(b['gross_pnl_rs']-b['charges_rs']-b['net_pnl_rs']),2)
+            if 'intrabar' in b['exit_reason']:
+                self.assertLessEqual(b['exit_first_fill'],a['exit_first_fill'])
+                self.assertLessEqual(b['exit_decision'][:16],a['exit_decision'])
+            else:self.assertEqual(b['net_pnl_rs'],a['net_pnl_rs'])                           # no intrabar trigger: identical to next-bar
+        self.assertTrue(all(r['check_rupees'] is not None and abs(r['check_rupees'])<=1 for r in nb if r['status']=='closed'))
+        self.assertTrue(any('intrabar' in r['exit_reason'] for r in sb))                         # the fixture does exercise an intrabar exit
+    def test_intrabar_trigger_on_a_known_minute(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        import numpy as np
+        class B:
+            def __init__(s,day,start,end,close):s.day,s.start,s.end,s.close=day,start,end,close
+        bars=[B('2024-01-02',555,600,100.),B('2024-01-02',600,645,100.),B('2024-01-02',645,690,100.)]
+        spot={'2024-01-02':np.full(375,100.)};spot['2024-01-02'][50]=98.9                       # 10:05: index 1.1 below the signal close
+        class Sim:
+            lc={};key=staticmethod(lambda c:c)
+            def arrays(s,day):
+                class A:close={}
+                return A()
+        pair=dict(entry_index=100.,held=(),cash=0.,units=50,day='2024-01-02',short_px=10.,bar=0)
+        atr={15:np.array([1.,1.,1.])}
+        r=tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',(('profit','none'),('stop','atr15x1')))
+        self.assertEqual(r[:3],(1,50,'stop'))                                                   # bar 1 (10:00-10:45), minute index 50 = 10:05
+        self.assertIsNone(tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',(('profit','none'),('stop','atr15x1.5'))))

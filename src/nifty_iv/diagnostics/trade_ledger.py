@@ -38,6 +38,11 @@ class LedgerSim(zp.PathSim):
             d=self.arrays(day);vol=d.vol[self.key(c)][i0:i1];cap=np.floor(vol*self.cfg.max_participation)//lot*lot
             first=i0+int(np.flatnonzero(cap)[0]);self.slice_log.append((day,first,j,c,n))
         return r
+    exit_start=None                                                        # (bar t, first minute index) of an intrabar exit (--exit-at same-bar)
+    def window(self,t):
+        w=super().window(t)
+        if w is not None and self.exit_start is not None and self.exit_start[0]==t:return (w[0],max(w[1],self.exit_start[1]),w[2])
+        return w
     def settle_px(self,c):
         px=super().settle_px(c)
         if px is not None:self.settle_log.append((c,px))
@@ -75,6 +80,63 @@ def config_from_meta(db):
     if not row:raise SystemExit('the paths file has no stored arguments (meta args): rebuild it with nifty-zone-paths')
     return zp.config(SimpleNamespace(**json.loads(row[0])))
 
+INTRABAR_KINDS=('atr','eatr','pct','epct','pts','target','tpct','mloss','loss','tp','mult')
+def spot_arrays(minutes):
+    """{day: close by minute index from the open (NaN where the index has no minute)}."""
+    out={}
+    for d,rows in minutes.items():
+        a=np.full(zs.CLOSE-zs.OPEN,np.nan)
+        for m,o,h,l,c in rows:
+            i=m-zs.OPEN
+            if 0<=i<len(a):a[i]=c
+        out[d]=a
+    return out
+
+def intrabar_trigger(sim,atr,bars,spot,pair,e_last,t,k,side,labels):
+    """--exit-at same-bar: the first minute, from the minute after the entry completed to the end of bar k (where the bar-close
+    rules decided the exit), at which a price-based profit or stop rule holds on that minute's close (NIFTY spot close; option
+    close for the premium and margin rules, the last print carried). Returns (bar j, minute index i, 'profit'|'stop', label) or
+    None. Rules of other kinds (time, ptime, trailing, zone change, expiry, ...) keep their bar-close decision."""
+    rules=[];S=1. if side=='bull' else -1.
+    s0=bars[t].close;e0=pair['entry_index'] if math.isfinite(pair['entry_index']) else s0
+    for part,lab in labels:
+        if lab.startswith('c:'):continue
+        r=zr.parse(lab)
+        if r[0] in INTRABAR_KINDS:rules.append((part,lab,r))
+    if not rules or e_last is None:return None
+    held=pair['held'];cash=pair['cash'];units=abs(pair['units']);mpu=ss.margin_per_unit(pair['day']);entry_px=pair['short_px']
+    last={c:sim.lc.get(c) for c,_ in held};j0=pair['bar']+1
+    for j in range(j0,min(k,len(bars)-1)+1):
+        b=bars[j];lo=b.start-zs.OPEN;hi=b.end-zs.OPEN
+        if j==j0:lo=max(lo,e_last[1]+1) if b.day==e_last[0] else lo
+        x=spot.get(b.day);arr=sim.arrays(b.day)
+        cl={c:arr.close.get(sim.key(c)) for c,_ in held}
+        for i in range(lo,hi):
+            printed=True
+            for c,_ in held:
+                a=cl[c];v=a[i] if a is not None else 0.
+                if v>0:last[c]=v
+                else:printed=False
+            xi=x[i] if x is not None else math.nan
+            d=S*(xi-s0);de=S*(xi-e0)
+            val=None if any(last[c] is None for c,_ in held) else sum(u*last[c] for c,u in held)
+            mark=None if val is None else (cash+val)/units
+            for part,lab,r in rules:
+                kind=r[0];hit=False
+                if kind in ('atr','eatr','target') and math.isfinite(xi):
+                    a=atr[r[1]][t];M=r[2]
+                    hit=(d>=M*a) if kind=='target' else (d<-M*a) if kind=='atr' else (de<-M*a)
+                elif kind=='pct' and math.isfinite(xi):hit=d<-r[1]/100*s0
+                elif kind=='epct' and math.isfinite(xi):hit=de<-r[1]/100*e0
+                elif kind=='pts' and math.isfinite(xi):hit=de<-r[1]
+                elif kind=='tpct' and math.isfinite(xi):hit=d>=r[1]/100*s0
+                elif kind=='mloss' and mark is not None:hit=mark<=-r[1]/100*mpu
+                elif kind=='loss' and printed and val is not None:hit=cash+val<=-r[1]*cash
+                elif kind=='tp' and printed and val is not None:hit=cash+val>=r[1]*cash
+                elif kind=='mult' and printed:hit=last[held[0][0]]>=r[1]*entry_px
+                if hit:return j,i,part,lab
+    return None
+
 def charges_sum(recs):
     out=collections.Counter()
     for r in recs:
@@ -84,13 +146,13 @@ def charges_sum(recs):
         out['mkt_notional']+=abs(r['units'])*r['px'];out['fill_notional']+=abs(r['units'])*r['actual']
     return out
 
-def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None):
+def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None,exit_at='next-bar'):
     """Rows (one per trade) for strategies [(side, structure, level, config, profit, stop)]. target_fraction: replay every trade at
     ceil(fraction x the margin-table lots on the paths' --target-margin) instead of the size the paths file was built with (1 = the
     whole budget); the signals and exit decision bars stay those of the paths file, see main's notes."""
     db=sqlite3.connect(f'file:{paths}?mode=ro',uri=True);cfg=cfg or config_from_meta(db);bars,final=bars_from_paths(db)
     overrides={k:v for k,v in (overrides or {}).items() if v is not None}
-    resized=target_fraction is not None or bool(overrides)                 # replayed under other fill settings: no check against the paths file
+    resized=target_fraction is not None or bool(overrides) or exit_at=='same-bar'   # replayed under other settings: no check against the paths file
     if target_fraction is not None:
         if not getattr(cfg,'target_margin',None):raise SystemExit('--target-fraction needs a paths file built with --target-margin')
         cfg=SimpleNamespace(**dict(vars(cfg),target_fraction=float(target_fraction)))
@@ -100,7 +162,7 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
         pinfo[side,st,float(off),sb]=dict(lot=lot,units=units,strike=strike,expiry=sexp,entry_day=eday,entry_px=epx,entry_index=eix)
     db.close()
     market=zb.Market(options,spot,keep=2);minutes=zs.load_minutes(spot)
-    sim=LedgerSim(market,bars,final,cfg,minutes)
+    sim=LedgerSim(market,bars,final,cfg,minutes);spot_px=spot_arrays(minutes) if exit_at=='same-bar' else None
     rec=[];orig=zp.fill_detail
     def spy(px,units,day,c_,expiry,volume,high=None,low=None,lot=None):
         r=orig(px,units,day,c_,expiry,volume,high,low,lot);rec.append(dict(day=day,px=px,units=units,cash=r[0],actual=r[1],slip=r[2],charges=r[3]));return r
@@ -124,7 +186,17 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                     ent=list(rec);rec.clear()
                     legs=list(pair['held']);want=abs(pair['units'])
                     e_first,e_last=entry_minutes(sim.cap_log,legs,want)
-                    xc,xbar,xday,xforced,ok,_,_,last_fill,_=sim.exit(pair['held'],k,pair['lot'])
+                    trig=None;k_bar=k
+                    if exit_at=='same-bar' and not x['hypothetical']:
+                        trig=intrabar_trigger(sim,D.bars.atr,bars,spot_px,pair,e_last,t,k,side,(('profit',pr),('stop',sp)))
+                    if trig:                                                   # fills from the minute after the triggering minute
+                        j,i,part,lab=trig;s_=i+1
+                        if s_<bars[j].end-zs.OPEN:k=j-1;sim.exit_start=(j-1,s_)
+                        else:k=j
+                        sim.memo.clear()
+                    try:xc,xbar,xday,xforced,ok,_,_,last_fill,_=sim.exit(pair['held'],k,pair['lot'])
+                    finally:sim.exit_start=None
+                    if trig:sim.memo.clear()
                     units=pair['units'];lot=pair['lot'];c0=pair['held'][0][0]
                     stored=x['unit']*(abs(pair['units']) if resized else x['units']);open_end=(not ok) or bool(x['hypothetical'])       # exit not complete inside the data: valued at its mark, as the paths file does
                     ex=[] if open_end else list(rec)
@@ -146,7 +218,8 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                         option=f"{'PE' if c0[2]=='PE' else 'CE'} {c0[1]:.0f} exp {c0[0]}",index_at_entry=round(pair['entry_index'],1) if math.isfinite(pair['entry_index']) else None,
                         lots=abs(units)//lot,lot_size=lot,units=abs(units),
                         entry_price_market=round(E['mkt_notional']/E['qty'],2),entry_price_filled=round(E['fill_notional']/E['qty'],2),entry_slippage_rs=round(E['slippage']),
-                        margin_rs=round(margin),exit_decision=f'{bk.day} {zs.hhmm(bk.end)}',exit_reason=x['reason'],
+                        margin_rs=round(margin),exit_decision=(f"{bars[trig[0]].day} {hm(trig[1])} intrabar" if trig else f'{bk.day} {zs.hhmm(bk.end)}'),
+                        exit_reason=(f"{trig[2]}_rule_intrabar:{trig[3]}" if trig else x['reason']),bar_close_exit_decision=f'{bars[k_bar].day} {zs.hhmm(bars[k_bar].end)}',
                         exit_first_fill=f'{x_first[0]} {hm(x_first[1])}' if x_first else ('settled' if settle_px is not None else ''),
                         exit_last_fill=f'{x_last[0]} {hm(x_last[1])}' if x_last else (f'{xday_s} 15:30 settlement' if settle_px is not None else 'open at data end (marked)' if open_end else ''),
                         exit_price_market=round(exit_px_mkt,2) if exit_px_mkt is not None else None,exit_price_filled=round(exit_px_fill,2) if exit_px_fill is not None else None,
@@ -221,17 +294,20 @@ def main(argv=None):
     ap.add_argument('--max-participation',type=float,help='replay with this share of each minute\'s volume (default: the paths file\'s, 0.20 unless built otherwise)')
     ap.add_argument('--entry-minutes',type=int,help='replay with entries limited to this many minutes after the signal bar\'s close (default: the paths file\'s; 0 = no limit)')
     ap.add_argument('--entry-bars',type=int,help='replay with entries allowed this many 45-minute windows (default: the paths file\'s, 3); raise it with --entry-minutes above 135')
+    ap.add_argument('--exit-at',choices=('next-bar','same-bar'),default='next-bar',help='next-bar (default): profit and stop rules are checked at 45-minute bar closes and the exit fills from the next minute. '
+                    'same-bar: price-based rules (atr, eatr, pct, epct, pts, target, tpct, mloss, loss, tp, mult) are also checked on every minute\'s close and the exit fills from the following minute, '
+                    'same participation rules; other rules (time, ptime, trailing, zone change, expiry) keep their bar-close decision')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
     rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction,
-              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars))
+              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars),exit_at=a.exit_at)
     if not rows:sys.exit('no trades')
     rows.sort(key=lambda r:(r.get('entry_first_fill') or '',r['strategy']))                      # one time line across strategies
     yr=years(rows,a.rate)
     for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr),(f'{a.out}_brief.csv',[brief(r) for r in rows])):
         keys=list(dict.fromkeys(k for r in data for k in r))
         with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
-    resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None or a.entry_bars is not None
+    resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None or a.entry_bars is not None or a.exit_at=='same-bar'
     val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];skip=[r for r in rows if r not in val]
     bad=[] if resized else [r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
@@ -254,9 +330,10 @@ def main(argv=None):
     if resized:
         sp=sum(1 for r in val if r.get('exit_spilled_bars'))
         how=(f'{a.target_fraction:g} x the margin-table lots' if a.target_fraction is not None else "the paths file's size")
-        how+=(f', participation {a.max_participation:g}' if a.max_participation is not None else '')+(f', entry minutes {a.entry_minutes}' if a.entry_minutes is not None else '')+(f', entry windows {a.entry_bars}' if a.entry_bars is not None else '')
+        ib=sum(1 for r in val if 'intrabar' in str(r.get('exit_reason','')))
+        how+=(f', participation {a.max_participation:g}' if a.max_participation is not None else '')+(f', entry minutes {a.entry_minutes}' if a.entry_minutes is not None else '')+(f', entry windows {a.entry_bars}' if a.entry_bars is not None else '')+(', exits checked every minute (same-bar)' if a.exit_at=='same-bar' else '')
         print(f"\nReplayed at {how}: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
-              f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete. "
+              f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete{f'; {ib} exits triggered intrabar' if a.exit_at=='same-bar' else ''}. "
               "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")
     else:
         print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(skip)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
