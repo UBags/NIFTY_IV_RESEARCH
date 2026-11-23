@@ -320,6 +320,7 @@ def evaluate(rules,b):
     ints=lambda idx,pos:np.array([parse(rules[i])[pos] for i in idx])
     S=b.sign[:,None];bars=b.bars
     cap=max(1,int(2e7//max(1,b.Np*b.Lmax)))           # rules per sub-batch: no temporary above ~2e7 elements
+    roll_={};donch_={}                                 # per-lookback caches (chand, donch) for this call
     if 'compound' in groups:                           # earliest of its three parts, each evaluated once
         idx=groups.pop('compound');parts=[parse(rules[i])[1:] for i in idx];uniq=sorted({x for p in parts for x in p})
         F=dict(zip(uniq,evaluate(uniq,b)))
@@ -358,13 +359,15 @@ def evaluate(rules,b):
         elif kind=='chand':
             m=np.zeros((len(idx),b.Np,b.Lmax),bool);a=np.nan_to_num(b.atr_now(15),nan=np.inf)
             for r,(L,mm) in enumerate(zip(P,M[:,0,0])):
-                pad=np.concatenate([np.repeat((b.sign*b.e0)[:,None],L-1,1),S*b.c],1)
-                roll=np.lib.stride_tricks.sliding_window_view(pad,L,axis=1).max(-1)
-                m[r]=(S*b.c)<roll-mm*a
+                if L not in roll_:                    # V4.9.13: one rolling maximum per lookback, shared by its multipliers (latest kept)
+                    roll_.clear();pad=np.concatenate([np.repeat((b.sign*b.e0)[:,None],L-1,1),S*b.c],1)
+                    roll_[L]=np.lib.stride_tricks.sliding_window_view(pad,L,axis=1).max(-1)
+                m[r]=(S*b.c)<roll_[L]-mm*a
         elif kind=='donch':
             m=np.zeros((len(idx),b.Np,b.Lmax),bool);a=np.nan_to_num(b.atr_now(15),nan=np.inf)
             for r,(L,cc) in enumerate(zip(P,M[:,0,0])):
-                lo=bars.prev_low[L][b.K];hi=bars.prev_high[L][b.K]
+                if L not in donch_:donch_.clear();donch_[L]=(bars.prev_low[L][b.K],bars.prev_high[L][b.K])   # V4.9.13: gathered once per lookback
+                lo,hi=donch_[L]
                 cush=cc*a if cc else 0.                       # zero cushion needs no ATR (0 x inf would be NaN)
                 m[r]=np.where(S>0,b.c<lo-cush,b.c>hi+cush)
         elif kind in ('be','gb','stag'):

@@ -65,7 +65,7 @@ def algorithm_digest(holidays=(),gap_policy='free'):
     group computation and the file writer (not the selection/report code, which may change without recomputing)."""
     import inspect;from nifty_iv.zone import paths as zone_paths;from nifty_iv.zone import signals as zone_signals
     h=hashlib.sha256(GRID_ALGORITHM.encode());h.update(Path(zr.__file__).read_bytes());h.update(np.__version__.encode())
-    for f in (load_paths,windows,sequence_all,_sequence_all_numpy,_seq_kernel_py,gap_occupancy,stop_chunks,_grid_group,save_npz,zone_paths.unpack,zone_paths.pack,
+    for f in (load_paths,windows,sequence_all,_sequence_all_numpy,_seq_kernel_py,_dedup_rows,gap_occupancy,stop_chunks,_grid_group,save_npz,zone_paths.unpack,zone_paths.pack,
               zone_signals.atr,zone_signals.rma,zone_signals.ema,zone_signals.Bar,zone_signals.minute_of):   # indicator code the stops use
         try:h.update(inspect.getsource(f).encode())
         except (OSError,TypeError):                                   # no source file (e.g. defined interactively): hash the bytecode
@@ -202,6 +202,16 @@ def _seq_kernel_py(ts,cptr,cbar,pix,gx,XB,VH,inw,wh,C,R):
     return n,s,w,ss
 _seq_kernel=_nb.njit(parallel=True)(_seq_kernel_py) if HAVE_NUMBA else None
 
+def _dedup_rows(J):
+    """Unique rows of the exit-row matrix J (rules, paths) by exact int64 bytes: (index of each unique row's first rule,
+    unique-row index of every rule). XB and the window values are functions of the exit row alone."""
+    J=np.ascontiguousarray(J,np.int64);seen={};first=[];inv=np.empty(len(J),np.int64)
+    for r in range(len(J)):
+        u=seen.setdefault(J[r].tobytes(),len(first))
+        if u==len(first):first.append(r)
+        inv[r]=u
+    return np.array(first,np.int64),inv
+
 def sequence_all(by_bar,idx,XB,VH,ed,wins_def,his_index,C,R,gaps=None):
     """sequence() for every configuration at once, one position at a time per (configuration, rule). Returns n, total, wins,
     sum of squares, each (windows, configurations, rules). Uses the numba kernel when numba is installed (identical results;
@@ -256,10 +266,12 @@ def _grid_group(g):
         if batch is None:n=np.zeros((len(wins_def),len(configs),R),np.int32);s_=np.zeros(n.shape);w=np.zeros(n.shape,np.int32);ss=np.zeros(n.shape)
         else:
             FPk=FP[pc_idx] if kind.startswith('compound') else FP
-            FS=zr.evaluate(S,batch);J=np.minimum(FPk[:,None,:],FS[None,:,:]);ar=np.arange(batch.Np)[None,None,:]
-            XB=batch.xb[ar,J].reshape(R,batch.Np).T                                   # (V4.9.1: the unused per-rule pnl / exit-day copies are no longer built)
-            VH=np.stack([batch.value_at(J,None,None,h).reshape(R,batch.Np).T for h in c['his_ord']])
-            n,s_,w,ss=sequence_all(by_bar,idx,XB,VH,ed,wins_def,c['his_index'],len(configs),R,gaps)
+            FS=zr.evaluate(S,batch);J=np.minimum(FPk[:,None,:],FS[None,:,:]).reshape(R,batch.Np)
+            first,inv=_dedup_rows(J);Ju=J[first];ar=np.arange(batch.Np)[None,:]          # V4.9.13: rules with identical exit rows sequence identically
+            XB=batch.xb[ar,Ju].T                                                       # (V4.9.1: the unused per-rule pnl / exit-day copies are no longer built)
+            VH=np.stack([batch.row_value(h)[ar,Ju].T for h in c['his_ord']])
+            n,s_,w,ss=sequence_all(by_bar,idx,XB,VH,ed,wins_def,c['his_index'],len(configs),len(first),gaps)
+            if len(first)<R:n,s_,w,ss=(a[:,:,inv] for a in (n,s_,w,ss))
         if n.max(initial=0)>np.iinfo(np.int16).max:raise OverflowError('trade count exceeds int16')
         shape=(len(wins_def),len(configs),len(Pk),len(S));tr=lambda a:a.reshape(shape).transpose(1,0,2,3)
         tmp=out_dir/(name+'.tmp.npz')

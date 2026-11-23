@@ -86,7 +86,7 @@ def fill_prices(o,h,l,c,mode):
 class DayArrays:
     """One session of the extraction as numpy arrays per contract: buy and sell fill prices (see fill_prices),
     close and volume by minute index; a minute is tradable when open > 0 and volume > 0."""
-    __slots__=('buy','sell','close','vol','px','high','low')
+    __slots__=('buy','sell','close','vol','px','high','low','cap')
     def __init__(self,day_dict,mode='ohlc4'):
         acc={}
         for minute,quotes in day_dict.items():
@@ -149,7 +149,16 @@ class PathSim:
             mode=getattr(self.cfg,'fill_price','ohlc4')
             d=self.days[day]=load_day(self.m.db,day,mode) if hasattr(self.m,'db') else DayArrays(self.m.day(day),mode)
             while len(self.days)>self.cache_days:self.days.popitem(last=False)
+        else:self.days.move_to_end(day)                  # V4.9.13: least-recently-used eviction (was first-loaded)
         return d
+    def capacity(self,d,k,lot):
+        """Whole-lot tradable units of contract key k at every minute of day d (at most --max-participation of each minute's
+        volume), computed once per (contract, lot, participation) and kept with the day (V4.9.13; same elementwise arithmetic)."""
+        try:cc=d.cap
+        except AttributeError:cc=d.cap={}
+        mp=self.cfg.max_participation;key=(k,lot,mp);a=cc.get(key)
+        if a is None:a=cc[key]=np.floor(d.vol[k]*mp)//lot*lot
+        return a
     def window(self,k):
         """(day, first minute index, end minute index) of the bar after k, where a decision at bar k's close fills."""
         b=self.bars[k]
@@ -169,7 +178,7 @@ class PathSim:
         at the buy or sell price of the fill-price model. Returns (units, notional, volume used, index of the last minute used or None)."""
         d=self.arrays(day);k=self.key(c);px=(d.buy if buy else d.sell).get(k)
         if px is None or i0>=i1 or want<=0:return 0,0.,0.,None
-        vol=d.vol[k][i0:i1];cap=np.floor(vol*self.cfg.max_participation)//lot*lot;cs=np.cumsum(cap)
+        vol=d.vol[k][i0:i1];cap=self.capacity(d,k,lot)[i0:i1];cs=np.cumsum(cap)
         total=int(cs[-1])
         if total<=0:return 0,0.,0.,None
         if total<want:j=int(np.flatnonzero(cap)[-1]);taken=cap
@@ -198,7 +207,7 @@ class PathSim:
         price array and the volume array; None if c has no price that day."""
         d=self.arrays(day);k=self.key(c);px=(d.buy if buy else d.sell).get(k)
         if px is None or i0>=i1:return None
-        vol=d.vol[k][i0:i1];return np.floor(vol*self.cfg.max_participation)//lot*lot,px[i0:i1],vol
+        vol=d.vol[k][i0:i1];return self.capacity(d,k,lot)[i0:i1].copy(),px[i0:i1],vol
     def enter(self,k,legs,lot,start=None,need=None,bars=1,colour=None,minutes=None):
         """legs: [(contract, signed units)], all at the same size, filled in the windows of bars k, k+1, .., k+bars-1 (a window = the
         minutes of the bar after it), from minute index `start` in the first window if given (after an exit that used earlier minutes

@@ -33,7 +33,7 @@ Rupees: per-unit P&L from the paths file (after slippage and charges at (O+H+L+C
 path's units x --scale (default 1 / the paths' --target-fraction: full size). Replay the final structure through
 nifty-diag-trade-ledger (conservative fills, intrabar stop, interest) before trusting the rupees. Searching many structures on
 the same data overfits: prefer the out-of-sample columns and structures whose neighbours also work."""
-import argparse,collections,csv,datetime as dt,json,math,sqlite3,statistics as stt,sys
+import argparse,collections,csv,datetime as dt,heapq,json,math,sqlite3,statistics as stt,sys
 from pathlib import Path
 import numpy as np
 from nifty_iv.zone import grid as zg
@@ -91,7 +91,7 @@ def signal_features(D,b,index,side,signals):
 def simulate(sd,basket,start='2000-01-01',end=None,exclude=None):
     """Trades of one strategy with basket = list of candidate indices (one per slice). Returns trades: dict(signal, entry, exit
     (last slice), legs [(exit day ISO, rupees)], pnl, features)."""
-    end=end or sd.end;K=len(basket);busy=-1;out=[];last=None;closed=[]
+    end=end or sd.end;K=len(basket);busy=-1;out=[];last=None;closed=[];pend=[];hd=-1;e_prev=''
     for t in sd.signals:
         if t<=busy:continue
         i=sd.index.get(t)
@@ -105,9 +105,14 @@ def simulate(sd,basket,start='2000-01-01',end=None,exclude=None):
         legs=[(dt.date.fromordinal(int(sd.XD[r,i])).isoformat(),v*sd.units[i]/K) for r,v in zip(basket,vals)]
         f=sd.feat.get(t)
         if f is not None:
-            f=f.copy();prior=[c for c in out if max(d for d,_ in c['legs'])<e]           # last trade fully closed before this entry
-            f[-1]=0. if not prior else (1. if prior[-1]['pnl']>0 else -1.)
+            f=f.copy()                                                                    # last trade fully closed before this entry:
+            if e>=e_prev:                                                                 # V4.9.13: entries in date order, so a trade closed
+                while pend and pend[0][0]<e:hd=max(hd,heapq.heappop(pend)[1])             # before one entry is closed before all later ones
+                done=hd
+            else:done=max([i for i,c in enumerate(out) if c['exit']<e],default=-1)     # (out of order: the original scan)
+            e_prev=max(e_prev,e);f[-1]=0. if done<0 else (1. if out[done]['pnl']>0 else -1.)
         out.append(dict(strategy=sd.name,side=sd.side,signal=t,entry=e,exit=max(d for d,_ in legs),legs=legs,pnl=sum(v for _,v in legs),features=f,mult=1.))
+        heapq.heappush(pend,(out[-1]['exit'],len(out)-1))
     return out
 
 def period_returns(trades,kind,capital,lo='0000',hi='9999'):

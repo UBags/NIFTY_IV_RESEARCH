@@ -1,3 +1,18 @@
+# V4.9.13 (2026-11-24)
+
+Speed only: every result is bit-identical to V4.9.12 (no tolerance). Reviewed against proposals from Gemini and ChatGPT;
+only changes that kept exact equality and measured faster were taken.
+
+| Item | Change |
+|---|---|
+| `zone/grid.py` | Exit-row dedup: rules whose exit rows (J) are identical on every path give identical XB, window values and sequencing, so each distinct row is sequenced once and the results are copied back (`_dedup_rows`). Gain depends on how many stops never fire or fire together (synthetic fixture: 1.7% distinct, grid 6.2 s -> 3.3 s; production to be measured). The sequencing kernel is unchanged: the proposed rule tiling and per-path window lists measured 0.52-0.83x (slower) and were not taken |
+| `zone/rules.py` | `chand`: one rolling maximum per lookback shared by its multipliers; `donch`: the previous-L low/high gathered once per lookback (latest lookback kept). chand+donch 4x, a full stop set 1.85x (2,025 calendar paths) |
+| `zone/paths.py` | Day cache is least-recently-used (was first-loaded: a day still in use could be evicted and re-read from SQLite); whole-lot per-minute capacities computed once per (contract, lot, participation) per cached day |
+| `strategy_scan.py`, `equity_dd_scan.py` | Same exit-row dedup (outputs byte-identical on the end-to-end fixture) |
+| `trade_structure.py` | The prior-trade feature no longer rescans every earlier trade (heap over exit dates; the original scan if entries ever go back in time): O(N log N) instead of O(N^2) |
+| Lineage | `grid.algorithm_digest` hashes rules.py and the grid functions, so grid folders built by V4.9.12 no longer verify: rebuild them (`nifty-zone-grid ... --resume` recomputes each file). `portfolio.code_digest` changes too (any freeze must be redone). Stored paths files stay valid |
+| Checks | `tests/test_perf_v4913.py` (11 tests: old kernel verbatim, rules one at a time vs together, slice/caps vs the old arithmetic, LRU, prior-trade feature vs the quadratic scan); end-to-end on a 30-session synthetic market: paths rows, all 2,736 grid arrays and both scanners' CSVs identical to V4.9.12; `scripts/compare_grid_dirs.py` for the same check on production grids. 667 tests pass with and without numba |
+
 # V4.9.12 (2026-11-23)
 
 | Item | Change |

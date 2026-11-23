@@ -81,10 +81,12 @@ def scan_group(g):
     for kind,S in chunks.items():
         Pk=PC if kind.startswith('compound') else P;FPk=FP[pc_idx] if kind.startswith('compound') else FP
         FS=zr.evaluate(S,b);J=np.minimum(FPk[:,None,:],FS[None,:,:]).reshape(len(Pk)*len(S),b.Np)          # (rules, paths)
+        first,inv=zg._dedup_rows(J);J=J[first]                                  # V4.9.13: identical exit rows computed once (exact)
         XB=np.ascontiguousarray(b.xb[ar,J].T,np.int64)
         pnl=b.pnl[ar,J];V=np.ascontiguousarray((pnl*b.units[None,:]).T)
         M=np.ascontiguousarray((np.minimum(np.minimum(cm[ar,J],pnl),0.)*b.units[None,:]).T)
-        s,n,w=_scan_kernel(ts,cptr,cbar,pix,gx,XB,V,M,yi,C,len(Pk)*len(S),len(years))
+        s,n,w=_scan_kernel(ts,cptr,cbar,pix,gx,XB,V,M,yi,C,len(first),len(years))
+        s,n,w=(s[:,inv],n[:,inv],w[:,inv])
         ret=s/cap*ann[None,None,:];RJ=ret[:,:,J_]
         ok=(n[:,:,J_].sum(2)>=c['min_trades'])&(RJ.min(2)>=c['min_year'])&(RJ.mean(2)>=c['min_mean'])&(w[:,:,J_].min(2)>=-c['max_dd']*cap)
         for ci,ri in zip(*np.nonzero(ok)):
