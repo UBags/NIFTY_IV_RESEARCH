@@ -12,7 +12,7 @@ held (entry fill day to the last exit fill or the settlement day; a same-day tra
 margin per unit of the strategy_spec table on the entry day (the margin the sizing and mloss stops use; not broker SPAN).
 
 Exits (V4.9.12). Default: the strategy's profit and stop rules are decided at 45-minute bar closes (as everywhere else), AND a
-protective stop rests at the broker (--intrabar-stop, default mult2: buy back if the sold option trades at twice its entry fill),
+protective stop rests at the broker (--intrabar-stop, default mloss7.5: buy back once the trade's loss reaches 7.5% of its margin),
 checked on every minute at the minute's worst price for the trade and filled from that minute. --intrabar-stop none = bar-close
 only (the earlier figures). --exit-at same-bar also checks the strategy's own price rules on every minute's close. A trade exited
 intrabar has exit_reason intrabar_stop:<rule> or <part>_rule_intrabar:<rule>, and no check_rupees (the paths file has no such exit).
@@ -89,7 +89,7 @@ def config_from_meta(db):
 
 INTRABAR_KINDS=('atr','eatr','pct','epct','pts','target','tpct','mloss','loss','tp','mult')
 DISASTER_KINDS=('atr','eatr','pct','epct','pts','mloss','loss','mult')      # stops only: --intrabar-stop
-DEFAULT_INTRABAR_STOP='mult2'                                               # buy back if the short option trades at 2x its entry fill
+DEFAULT_INTRABAR_STOP='mloss7.5'   # loss >= 7.5% of margin: same rupee risk for both legs; chosen 2026-11-23 from a sweep (none, mult1.75/2/2.5, mloss5/7.5)
 
 def spot_arrays(minutes):
     """{day: (close, high, low) by minute index from the open (NaN where the index has no minute)}."""
@@ -328,8 +328,8 @@ def main(argv=None):
                     'same-bar: price-based rules (atr, eatr, pct, epct, pts, target, tpct, mloss, loss, tp, mult) are also checked on every minute\'s close and the exit fills from the following minute, '
                     'same participation rules; other rules (time, ptime, trailing, zone change, expiry) keep their bar-close decision')
     ap.add_argument('--intrabar-stop',default=DEFAULT_INTRABAR_STOP,help='protective stop checked on every minute at the minute\'s worst price for the trade (as a resting stop order at the broker would be), '
-                    'on top of the strategy\'s own rules; the exit fills from that minute. A stop rule: mult X (short option at X times its entry fill; default mult2 = premium doubles), '
-                    'mloss X (loss >= X%% of margin), loss X (loss >= X%% of the credit), atr/eatr PxM, pct/epct X, pts X; none = off')
+                    'on top of the strategy\'s own rules; the exit fills from that minute. A stop rule: mloss X (loss >= X%% of margin; default mloss7.5), mult X (short option at X times its entry fill), '
+                    'loss X (loss >= X%% of the credit), atr/eatr PxM, pct/epct X, pts X; none = off')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
     rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction,
