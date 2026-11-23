@@ -1307,7 +1307,7 @@ class TradeLedgerV4912(GridV491):
             self.assertLessEqual(abs(r['gross_pnl_rs']-r['charges_rs']-r['net_pnl_rs']),2)
             self.assertGreaterEqual(r['days_held'],1);self.assertTrue(r['entry_first_fill'])
             self.assertAlmostEqual(r['interest_rs'],r['margin_rs']*.10*r['days_held']/365,delta=1)
-        y=tl.years(rows)
+        y=[d for d in tl.years(rows) if d['strategy']!='combined']
         for d in y:
             rs=[r for r in rows if r['strategy']==d['strategy'] and r['year']==d['year']]
             self.assertEqual(d['trades'],len(rs));self.assertEqual(d['net_after_interest_rs'],sum(r['net_after_interest_rs'] for r in rs))
@@ -1334,6 +1334,21 @@ class TradeLedgerV4912(GridV491):
         self.assertTrue(all(r['status']=='not_filled_at_size' for r in thin))
         b=tl.brief(ok[0]);self.assertEqual(list(b)[:6],['strategy','side','year','status','option','entry_time'])
 
+    def test_combined_years_sum_the_strategies_and_track_peak_margin(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        p,_,_=self._grid()
+        rows=tl.ledger(str(p),self.op,self.sp,[('bull','naked',0.,'zone_only_tw2','none','none'),('bear','naked',0.,'zone_only_tw2','none','none')],end='2025-01-01',cfg=pcfg())
+        y=tl.years(rows);c=[d for d in y if d['strategy']=='combined'];self.assertTrue(c)
+        for d in c:
+            per=[e for e in y if e['strategy']!='combined' and e['year']==d['year']]
+            self.assertEqual(d['trades'],sum(e['trades'] for e in per));self.assertEqual(d['net_after_interest_rs'],sum(e['net_after_interest_rs'] for e in per))
+            if d['trades']:self.assertGreaterEqual(d['peak_margin_rs'],max(r['margin_rs'] for r in rows if r['year']==d['year']))
+        self.assertFalse([d for d in tl.years(rows[:1]) if d['strategy']=='combined'])       # one strategy: no combined rows
+    def test_peak_margin_frees_before_entering_on_the_same_day(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        r=lambda a,b,m:dict(entry_day=a,exit_day=b,margin_rs=m)
+        self.assertEqual(tl.peak_margin([r('2024-01-01','2024-01-05',10),r('2024-01-05','2024-01-09',7)]),{'2024':10})
+        self.assertEqual(tl.peak_margin([r('2024-01-01','2024-01-05',10),r('2024-01-03','2024-01-09',7)]),{'2024':17})
 class StopCompareV4912(GridV491):
     """V4.9.12: alternative stops on fixed entries; the current stop reproduces the paths file; metrics on a known series."""
     def test_current_stop_reproduces_and_alternatives_differ(self):

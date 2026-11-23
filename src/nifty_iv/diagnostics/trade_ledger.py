@@ -139,7 +139,7 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                     if not all(map(math.isfinite,(gross,net,E['total'],X['total']))):
                         raise SystemExit(f"replay of {key} signal bar {t} (entry {pair['day']}) gave a non-finite value: gross {gross}, net {net}, entry charges {E['total']}, exit charges {X['total']}, exit ok={ok}")
                     b=bars[t];bk=bars[k]
-                    rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=eday[:4],status='open_at_data_end' if open_end else 'closed',
+                    rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=eday[:4],status='open_at_data_end' if open_end else 'closed',entry_day=eday,exit_day=xday_s,
                         signal=f'{b.day} {zs.hhmm(b.end)}',entry_first_fill=f'{e_first[0]} {hm(e_first[1])}' if e_first else '',entry_last_fill=f'{e_last[0]} {hm(e_last[1])}' if e_last else '',
                         option=f"{'PE' if c0[2]=='PE' else 'CE'} {c0[1]:.0f} exp {c0[0]}",index_at_entry=round(pair['entry_index'],1) if math.isfinite(pair['entry_index']) else None,
                         lots=abs(units)//lot,lot_size=lot,units=abs(units),
@@ -171,6 +171,27 @@ def years(rows,rate=.10):
         my=sum(r['margin_rs']*r['days_held'] for r in rs)/365;d['margin_years']=round(my/d['avg_margin_rs'],3) if d['avg_margin_rs'] else None
         d['net_pct_per_margin_year']=round(100*d['net_after_interest_rs']/my,2) if my else None
         d['days_held']=sum(r['days_held'] for r in rs);d['unvalued_trades']=unv[s,y];out.append(d)
+    if len({r['strategy'] for r in rows})>1:out+=combined_years(rows)
+    return out
+
+def peak_margin(rows):
+    """{year: largest margin held at once by the valued trades of all strategies together}. A trade holds its margin from its entry day
+    to its exit day; on a day with both, the exit is taken first (the margin is freed before the next entry)."""
+    ev=sorted([(r['entry_day'],1,r['margin_rs']) for r in rows if r.get('entry_day')]+[(r['exit_day'],0,-r['margin_rs']) for r in rows if r.get('entry_day')])
+    cur=0;peak={}
+    for day,_,m in ev:
+        cur+=m
+        if m>0:peak[day[:4]]=max(peak.get(day[:4],0),cur)
+    return peak
+
+def combined_years(rows):
+    """One account running every strategy: per calendar year of entry, the valued trades of all strategies summed, with the peak margin
+    held at once (above the per-strategy budget when positions overlap)."""
+    val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];pk=peak_margin(val);out=[]
+    for y in sorted({r['year'] for r in rows}):
+        rs=[r for r in val if r['year']==y];d=dict(strategy='combined',year=y,trades=len(rs),**{k:sum(r[k] for r in rs) for k in YEAR_KEYS})
+        d['peak_margin_rs']=pk.get(y);d['net_pct_of_peak_margin']=round(100*d['net_after_interest_rs']/pk[y],2) if pk.get(y) else None
+        d['days_held']=sum(r['days_held'] for r in rs);d['unvalued_trades']=sum(1 for r in rows if r['year']==y and r not in val);out.append(d)
     return out
 
 def parse_strategy(s):
@@ -199,6 +220,7 @@ def main(argv=None):
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
     rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction)
     if not rows:sys.exit('no trades')
+    rows.sort(key=lambda r:(r.get('entry_first_fill') or '',r['strategy']))                      # one time line across strategies
     yr=years(rows,a.rate)
     for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr),(f'{a.out}_brief.csv',[brief(r) for r in rows])):
         keys=list(dict.fromkeys(k for r in data for k in r))
@@ -214,6 +236,15 @@ def main(argv=None):
             if d['strategy']!=s:continue
             print(f"{d['year']:<6}{d['trades']:>7}{d['gross_pnl_rs']:>20,.0f}{rs(d['slippage_rs'])}{rs(d['brokerage_rs'])}{d['gst_rs']:>10,.0f}{d['stt_rs']:>10,.0f}{d['other_charges_rs']:>10,.0f}"
                   f"{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{rs(d['avg_margin_rs'] or 0)}{(d['net_pct_of_avg_margin'] or 0):>13.1f}%" + (f"  ({d['unvalued_trades']} excluded)" if d['unvalued_trades'] else ''))
+    cy=[d for d in yr if d['strategy']=='combined']
+    if cy:
+        print('\n=== combined (one account, all strategies) ===')
+        print(f"{'year':<6}{'trades':>7}{'gross (after slip)':>20}{'charges':>12}{'interest':>12}{'net':>12}{'peak margin':>14}{'% peak margin':>15}")
+        for d in cy:
+            ch=d['brokerage_rs']+d['gst_rs']+d['stt_rs']+d['other_charges_rs']
+            print(f"{d['year']:<6}{d['trades']:>7}{d['gross_pnl_rs']:>20,.0f}{rs(ch)}{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{(d['peak_margin_rs'] or 0):>14,.0f}{(d['net_pct_of_peak_margin'] or 0):>14.1f}%")
+        t={k:sum(d[k] for d in cy) for k in ('trades','gross_pnl_rs','interest_rs','net_after_interest_rs')}
+        print(f"{'all':<6}{t['trades']:>7}{t['gross_pnl_rs']:>20,.0f}{'':>12}{rs(t['interest_rs'])}{rs(t['net_after_interest_rs'])}{max((d['peak_margin_rs'] or 0) for d in cy):>14,.0f}")
     if resized:
         sp=sum(1 for r in val if r.get('exit_spilled_bars'))
         print(f"\nReplayed at {a.target_fraction:g} x the margin-table lots: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
