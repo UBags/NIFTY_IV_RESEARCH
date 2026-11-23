@@ -20,6 +20,7 @@ import numpy as np
 from nifty_iv.zone import grid as zg
 from nifty_iv.zone import rules as zr
 from nifty_iv.zone import portfolio as zpf
+from nifty_iv.core import cli
 
 LIMITING=('mloss','pts','pct','epct','atr','eatr','trail','strail','trailpct','trailpts','chand','donch','be','gb','loss','dloss','mult','compound')
 
@@ -43,7 +44,7 @@ def leg_candidates(grid,idx,leg,per_leg,min_trades,years):
     return list(out),len(rows)
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--grid',required=True);ap.add_argument('--paths',required=True);ap.add_argument('--holidays')
     ap.add_argument('--green',default='bull,futures_zone,0,N3_k1.25_m8_j0.75_tw2',help='side,structure,level,config')
     ap.add_argument('--red',default='bear,naked,-2,N3_k0.25_m8_j0.25_tw2;bear,futures_zone,0,zone_only_tw2;bear,naked,-2,N3_k0.25_m8_j1.0_tw2',help='one or more, ; separated')

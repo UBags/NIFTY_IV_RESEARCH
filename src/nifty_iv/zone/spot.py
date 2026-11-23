@@ -6,6 +6,7 @@ spot file as nifty-data-research-cache and never writes to PostgreSQL. Credentia
 PG* environment variables, as for the cache build."""
 import argparse,datetime as dt,sqlite3
 from nifty_iv.data.research_cache import connect
+from nifty_iv.core import cli
 
 SQL='''
 SELECT DISTINCT ON (b.bar_time) b.trading_day::text,
@@ -20,7 +21,7 @@ ORDER BY b.bar_time,b.source_row_index
 '''
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--from-date',default='2020-01-01',help='Earlier data warms up the slow EMAs');ap.add_argument('--to-date',default='2026-07-01')
     ap.add_argument('--out',default='zone_spot.sqlite');a=ap.parse_args()
     db=sqlite3.connect(a.out)

@@ -33,6 +33,7 @@ from nifty_iv.zone import rules as zr
 from nifty_iv.core import strategy_spec as ss
 from nifty_iv.zone.rules import parse,neighbours,config_neighbours,BarArrays,Batch
 from nifty_iv.zone.paths import unpack
+from nifty_iv.core import cli
 
 PERIODS=zr.ATR_PERIODS
 def profit_rules(structure):return zr.profit_rules(structure)
@@ -694,7 +695,7 @@ def print_summary(res):
         for r in flagged:print(f"  {r['side']} {r['structure']} {int(r['offset']):+d}: fill rate {r['fill_rate']}, filled {r['atm_ref_filled_mean']} (n {r['atm_ref_filled_n']}) vs not {r['atm_ref_not_filled_mean']} (n {r['atm_ref_not_filled_n']}), t {r['welch_t']}")
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',required=True,help='zone_paths.sqlite');ap.add_argument('--out',default='zone_grid')
     ap.add_argument('--start',default='2021-09-01');ap.add_argument('--split',default='2025-01-01')
     ap.add_argument('--holidays',help='Exchange holiday list (one date per line, common formats) for weekend exits; recorded in the grid lineage')

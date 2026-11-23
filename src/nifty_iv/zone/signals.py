@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse,collections,datetime as dt,itertools,json,math,sqlite3,statistics
 from dataclasses import dataclass
 import numpy as np
+from nifty_iv.core import cli
 
 OPEN=9*60+15;CLOSE=15*60+30
 LEN45=dict(s=(89,48,24),l=(56,43,6),h=(31,40,16),hh=(23,48,7))
@@ -211,7 +212,7 @@ def summary(x):
 def zs_h(m):return hhmm(m)
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--spot',required=True,help='zone_spot.sqlite from nifty-zone-spot');ap.add_argument('--split',default='2025-01-01')
     ap.add_argument('--out',default='zone_signals.json');ap.add_argument('--v14',action='store_true',help='Reproduce v14: persistence filter inactive')
     a=ap.parse_args()

@@ -11,6 +11,12 @@ Added on top of the engine (not in any earlier figure): interest on the position
 held (entry fill day to the last exit fill or the settlement day; a same-day trade counts 1 day). Margin = units x the upper-end
 margin per unit of the strategy_spec table on the entry day (the margin the sizing and mloss stops use; not broker SPAN).
 
+Exits (V4.9.12). Default: the strategy's profit and stop rules are decided at 45-minute bar closes (as everywhere else), AND a
+protective stop rests at the broker (--intrabar-stop, default mult2: buy back if the sold option trades at twice its entry fill),
+checked on every minute at the minute's worst price for the trade and filled from that minute. --intrabar-stop none = bar-close
+only (the earlier figures). --exit-at same-bar also checks the strategy's own price rules on every minute's close. A trade exited
+intrabar has exit_reason intrabar_stop:<rule> or <part>_rule_intrabar:<rule>, and no check_rupees (the paths file has no such exit).
+
 Outputs: <out>_trades.csv (one row per trade), <out>_years.csv (per strategy and calendar year of entry), printed tables.
 Years 2025-26 were examined before (docs/CODEMAP_V4_9_11.md); 2026 = January-June."""
 import argparse,collections,csv,datetime as dt,json,math,sqlite3,sys
@@ -23,6 +29,7 @@ from nifty_iv.zone import signals as zs
 from nifty_iv.zone import backtest as zb
 from nifty_iv.zone import paths as zp
 from nifty_iv.core import strategy_spec as ss
+from nifty_iv.core import cli
 
 def hm(i):return zs.hhmm(zs.OPEN+int(i))
 
@@ -81,47 +88,68 @@ def config_from_meta(db):
     return zp.config(SimpleNamespace(**json.loads(row[0])))
 
 INTRABAR_KINDS=('atr','eatr','pct','epct','pts','target','tpct','mloss','loss','tp','mult')
+DISASTER_KINDS=('atr','eatr','pct','epct','pts','mloss','loss','mult')      # stops only: --intrabar-stop
+DEFAULT_INTRABAR_STOP='mult2'                                               # buy back if the short option trades at 2x its entry fill
+
 def spot_arrays(minutes):
-    """{day: close by minute index from the open (NaN where the index has no minute)}."""
+    """{day: (close, high, low) by minute index from the open (NaN where the index has no minute)}."""
     out={}
     for d,rows in minutes.items():
-        a=np.full(zs.CLOSE-zs.OPEN,np.nan)
+        a=np.full((3,zs.CLOSE-zs.OPEN),np.nan)
         for m,o,h,l,c in rows:
             i=m-zs.OPEN
-            if 0<=i<len(a):a[i]=c
+            if 0<=i<a.shape[1]:a[:,i]=(c,h,l)
         out[d]=a
     return out
 
-def intrabar_trigger(sim,atr,bars,spot,pair,e_last,t,k,side,labels):
-    """--exit-at same-bar: the first minute, from the minute after the entry completed to the end of bar k (where the bar-close
-    rules decided the exit), at which a price-based profit or stop rule holds on that minute's close (NIFTY spot close; option
-    close for the premium and margin rules, the last print carried). Returns (bar j, minute index i, 'profit'|'stop', label) or
-    None. Rules of other kinds (time, ptime, trailing, zone change, expiry, ...) keep their bar-close decision."""
-    rules=[];S=1. if side=='bull' else -1.
+def check_intrabar_stop(label):
+    if label in (None,'','none'):return None
+    try:r=zr.parse(label)
+    except ValueError:raise SystemExit(f'--intrabar-stop {label}: unknown rule')
+    if r[0] not in DISASTER_KINDS:raise SystemExit(f'--intrabar-stop {label}: must be one of the stop families {", ".join(DISASTER_KINDS)} (or none)')
+    return label
+
+def intrabar_trigger(sim,atr,bars,spot,pair,e_last,t,k,side,rules):
+    """The first minute, from the minute after the entry completed to the end of bar k (where the bar-close rules decided the
+    exit), at which one of `rules` holds. rules: [(part, label, mode)]:
+      mode 'close'   (--exit-at same-bar): the rule is tested on the minute's close (NIFTY spot close; option close for the
+                     premium and margin rules, the last print carried); the exit fills from the next minute.
+      mode 'extreme' (--intrabar-stop): the rule is tested on the minute's worst price for the trade (index low for a bull trade,
+                     high for a bear trade; option high for a short leg, low for a long leg), as a resting stop order or a
+                     tick-watching program would see it; the exit fills from that same minute.
+    Returns (bar j, minute index i, part, label, mode) or None. Rules of other kinds keep their bar-close decision."""
+    S=1. if side=='bull' else -1.
     s0=bars[t].close;e0=pair['entry_index'] if math.isfinite(pair['entry_index']) else s0
-    for part,lab in labels:
-        if lab.startswith('c:'):continue
+    todo=[]
+    for part,lab,mode in rules:
+        if not lab or lab=='none' or lab.startswith('c:'):continue
         r=zr.parse(lab)
-        if r[0] in INTRABAR_KINDS:rules.append((part,lab,r))
-    if not rules or e_last is None:return None
+        if r[0] in INTRABAR_KINDS:todo.append((part,lab,r,mode))
+    if not todo or e_last is None:return None
+    todo.sort(key=lambda x:x[3]!='extreme')                                   # within a minute, the resting stop first
     held=pair['held'];cash=pair['cash'];units=abs(pair['units']);mpu=ss.margin_per_unit(pair['day']);entry_px=pair['short_px']
-    last={c:sim.lc.get(c) for c,_ in held};j0=pair['bar']+1
+    last={c:sim.lc.get(c) for c,_ in held};worst={c:sim.lc.get(c) for c,_ in held};j0=pair['bar']+1
     for j in range(j0,min(k,len(bars)-1)+1):
         b=bars[j];lo=b.start-zs.OPEN;hi=b.end-zs.OPEN
-        if j==j0:lo=max(lo,e_last[1]+1) if b.day==e_last[0] else lo
-        x=spot.get(b.day);arr=sim.arrays(b.day)
-        cl={c:arr.close.get(sim.key(c)) for c,_ in held}
+        if j==j0 and b.day==e_last[0]:lo=max(lo,e_last[1]+1)
+        x=spot.get(b.day);arr=sim.arrays(b.day);key={c:sim.key(c) for c,_ in held}
+        cl={c:arr.close.get(key[c]) for c,_ in held}
+        ex={c:(getattr(arr,'high',{}).get(key[c]) if u<0 else getattr(arr,'low',{}).get(key[c])) for c,u in held}
         for i in range(lo,hi):
             printed=True
             for c,_ in held:
                 a=cl[c];v=a[i] if a is not None else 0.
                 if v>0:last[c]=v
                 else:printed=False
-            xi=x[i] if x is not None else math.nan
-            d=S*(xi-s0);de=S*(xi-e0)
-            val=None if any(last[c] is None for c,_ in held) else sum(u*last[c] for c,u in held)
-            mark=None if val is None else (cash+val)/units
-            for part,lab,r in rules:
+                e=ex[c];w=e[i] if e is not None else 0.
+                worst[c]=w if w>0 else last[c]
+            if x is not None:xc,xh,xl=x[0][i],x[1][i],x[2][i]
+            else:xc=xh=xl=math.nan
+            for part,lab,r,mode in todo:
+                xi=xc if mode=='close' else (xl if S>0 else xh)
+                px=last if mode=='close' else worst
+                d=S*(xi-s0);de=S*(xi-e0)
+                val=None if any(px[c] is None for c,_ in held) else sum(u*px[c] for c,u in held)
                 kind=r[0];hit=False
                 if kind in ('atr','eatr','target') and math.isfinite(xi):
                     a=atr[r[1]][t];M=r[2]
@@ -130,11 +158,11 @@ def intrabar_trigger(sim,atr,bars,spot,pair,e_last,t,k,side,labels):
                 elif kind=='epct' and math.isfinite(xi):hit=de<-r[1]/100*e0
                 elif kind=='pts' and math.isfinite(xi):hit=de<-r[1]
                 elif kind=='tpct' and math.isfinite(xi):hit=d>=r[1]/100*s0
-                elif kind=='mloss' and mark is not None:hit=mark<=-r[1]/100*mpu
+                elif kind=='mloss' and val is not None:hit=(cash+val)/units<=-r[1]/100*mpu
                 elif kind=='loss' and printed and val is not None:hit=cash+val<=-r[1]*cash
                 elif kind=='tp' and printed and val is not None:hit=cash+val>=r[1]*cash
-                elif kind=='mult' and printed:hit=last[held[0][0]]>=r[1]*entry_px
-                if hit:return j,i,part,lab
+                elif kind=='mult' and printed and px[held[0][0]] is not None:hit=px[held[0][0]]>=r[1]*entry_px
+                if hit:return j,i,part,lab,mode
     return None
 
 def charges_sum(recs):
@@ -146,7 +174,7 @@ def charges_sum(recs):
         out['mkt_notional']+=abs(r['units'])*r['px'];out['fill_notional']+=abs(r['units'])*r['actual']
     return out
 
-def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None,exit_at='next-bar'):
+def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None,exit_at='next-bar',intrabar_stop=None):
     """Rows (one per trade) for strategies [(side, structure, level, config, profit, stop)]. target_fraction: replay every trade at
     ceil(fraction x the margin-table lots on the paths' --target-margin) instead of the size the paths file was built with (1 = the
     whole budget); the signals and exit decision bars stay those of the paths file, see main's notes."""
@@ -162,7 +190,8 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
         pinfo[side,st,float(off),sb]=dict(lot=lot,units=units,strike=strike,expiry=sexp,entry_day=eday,entry_px=epx,entry_index=eix)
     db.close()
     market=zb.Market(options,spot,keep=2);minutes=zs.load_minutes(spot)
-    sim=LedgerSim(market,bars,final,cfg,minutes);spot_px=spot_arrays(minutes) if exit_at=='same-bar' else None
+    sim=LedgerSim(market,bars,final,cfg,minutes);intrabar_stop=check_intrabar_stop(intrabar_stop)
+    spot_px=spot_arrays(minutes) if exit_at=='same-bar' or intrabar_stop else None
     rec=[];orig=zp.fill_detail
     def spy(px,units,day,c_,expiry,volume,high=None,low=None,lot=None):
         r=orig(px,units,day,c_,expiry,volume,high,low,lot);rec.append(dict(day=day,px=px,units=units,cash=r[0],actual=r[1],slip=r[2],charges=r[3]));return r
@@ -187,10 +216,11 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                     legs=list(pair['held']);want=abs(pair['units'])
                     e_first,e_last=entry_minutes(sim.cap_log,legs,want)
                     trig=None;k_bar=k
-                    if exit_at=='same-bar' and not x['hypothetical']:
-                        trig=intrabar_trigger(sim,D.bars.atr,bars,spot_px,pair,e_last,t,k,side,(('profit',pr),('stop',sp)))
-                    if trig:                                                   # fills from the minute after the triggering minute
-                        j,i,part,lab=trig;s_=i+1
+                    rules=([('profit',pr,'close'),('stop',sp,'close')] if exit_at=='same-bar' else [])+([('disaster',intrabar_stop,'extreme')] if intrabar_stop else [])
+                    if rules and not x['hypothetical']:
+                        trig=intrabar_trigger(sim,D.bars.atr,bars,spot_px,pair,e_last,t,k,side,rules)
+                    if trig:                                                   # close: from the next minute; extreme (resting stop): from that minute
+                        j,i,part,lab,mode=trig;s_=i+1 if mode=='close' else i
                         if s_<bars[j].end-zs.OPEN:k=j-1;sim.exit_start=(j-1,s_)
                         else:k=j
                         sim.memo.clear()
@@ -219,7 +249,7 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                         lots=abs(units)//lot,lot_size=lot,units=abs(units),
                         entry_price_market=round(E['mkt_notional']/E['qty'],2),entry_price_filled=round(E['fill_notional']/E['qty'],2),entry_slippage_rs=round(E['slippage']),
                         margin_rs=round(margin),exit_decision=(f"{bars[trig[0]].day} {hm(trig[1])} intrabar" if trig else f'{bk.day} {zs.hhmm(bk.end)}'),
-                        exit_reason=(f"{trig[2]}_rule_intrabar:{trig[3]}" if trig else x['reason']),bar_close_exit_decision=f'{bars[k_bar].day} {zs.hhmm(bars[k_bar].end)}',
+                        exit_reason=((f"intrabar_stop:{trig[3]}" if trig[2]=='disaster' else f"{trig[2]}_rule_intrabar:{trig[3]}") if trig else x['reason']),bar_close_exit_decision=f'{bars[k_bar].day} {zs.hhmm(bars[k_bar].end)}',
                         exit_first_fill=f'{x_first[0]} {hm(x_first[1])}' if x_first else ('settled' if settle_px is not None else ''),
                         exit_last_fill=f'{x_last[0]} {hm(x_last[1])}' if x_last else (f'{xday_s} 15:30 settlement' if settle_px is not None else 'open at data end (marked)' if open_end else ''),
                         exit_price_market=round(exit_px_mkt,2) if exit_px_mkt is not None else None,exit_price_filled=round(exit_px_fill,2) if exit_px_fill is not None else None,
@@ -227,7 +257,7 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                         slippage_rs=round(E['slippage']+X['slippage']),gross_pnl_rs=round(gross),
                         brokerage_rs=round(E['brokerage']+X['brokerage']),gst_rs=round(E['gst']+X['gst']),stt_rs=round(E['stt']+X['stt']),other_charges_rs=round(E['other']+X['other']),
                         charges_rs=round(E['total']+X['total']),net_pnl_rs=round(net),days_held=days,interest_rs=round(interest),net_after_interest_rs=round(net-interest),
-                        forced_exit=bool(xforced) and not open_end,open_at_data_end=open_end,exit_spilled_bars=max(0,int(xbar)-k-1),check_rupees=None if resized else round(net-stored,2)))
+                        forced_exit=bool(xforced) and not open_end,open_at_data_end=open_end,exit_spilled_bars=max(0,int(xbar)-k-1),check_rupees=None if (resized or trig) else round(net-stored,2)))
     finally:zp.fill_detail=orig;market.close()
     return rows
 
@@ -284,7 +314,7 @@ def brief(r):
     return {k:out[k] for k,_ in BRIEF}
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',required=True);ap.add_argument('--options',required=True,help='the option extraction the paths were built from');ap.add_argument('--spot',required=True)
     ap.add_argument('--strategy',action='append',required=True,help='side,structure,level,config,profit,stop (repeat)')
     ap.add_argument('--holidays');ap.add_argument('--gap-policy',choices=zg.GAP_POLICIES,default='busy')
@@ -297,10 +327,13 @@ def main(argv=None):
     ap.add_argument('--exit-at',choices=('next-bar','same-bar'),default='next-bar',help='next-bar (default): profit and stop rules are checked at 45-minute bar closes and the exit fills from the next minute. '
                     'same-bar: price-based rules (atr, eatr, pct, epct, pts, target, tpct, mloss, loss, tp, mult) are also checked on every minute\'s close and the exit fills from the following minute, '
                     'same participation rules; other rules (time, ptime, trailing, zone change, expiry) keep their bar-close decision')
+    ap.add_argument('--intrabar-stop',default=DEFAULT_INTRABAR_STOP,help='protective stop checked on every minute at the minute\'s worst price for the trade (as a resting stop order at the broker would be), '
+                    'on top of the strategy\'s own rules; the exit fills from that minute. A stop rule: mult X (short option at X times its entry fill; default mult2 = premium doubles), '
+                    'mloss X (loss >= X%% of margin), loss X (loss >= X%% of the credit), atr/eatr PxM, pct/epct X, pts X; none = off')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
     rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction,
-              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars),exit_at=a.exit_at)
+              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars),exit_at=a.exit_at,intrabar_stop=a.intrabar_stop)
     if not rows:sys.exit('no trades')
     rows.sort(key=lambda r:(r.get('entry_first_fill') or '',r['strategy']))                      # one time line across strategies
     yr=years(rows,a.rate)
@@ -337,6 +370,9 @@ def main(argv=None):
               "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")
     else:
         print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(skip)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
+    if a.intrabar_stop not in (None,'','none'):
+        hit=[r for r in val if str(r.get('exit_reason','')).startswith('intrabar_stop:')]
+        print(f"intrabar stop {a.intrabar_stop}: fired on {len(hit)} of {len(val)} trades" + (f" (net {sum(r['net_pnl_rs'] for r in hit):,.0f}; dates {', '.join(r['exit_decision'][:16] for r in hit[:8])}{' ...' if len(hit)>8 else ''})" if hit else ''))
     print(f'-> {a.out}_trades.csv, {a.out}_years.csv, {a.out}_brief.csv  (pnl = after slippage and all charges; % avg margin = net after interest / average margin per trade)')
     for r in skip:print(f"  {r['status']}: {r['strategy']} signal {r['signal']} entry {r['entry_first_fill']} ({r['exit_reason']})")
     if bad:sys.exit(1)

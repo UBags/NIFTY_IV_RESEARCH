@@ -4,9 +4,10 @@ from contextlib import closing
 import argparse,os,json,sqlite3
 from pathlib import Path
 from nifty_iv.core import lineage as lineage
+from nifty_iv.core import cli
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
+    p=cli.Parser(description=__doc__)
     p.add_argument('--name',required=True);p.add_argument('--provider',required=True)
     p.add_argument('--cache',default='research_cache_v4.sqlite')
     p.add_argument('--trades',default='research_trades_v4.sqlite')

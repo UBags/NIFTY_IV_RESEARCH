@@ -17,6 +17,7 @@ from nifty_iv.ivcal.candidate_core import IST,Data as BaseData,generate,years,dt
 from nifty_iv.core.contract_specs import LotMaster
 from nifty_iv.ivcal.settlements import SettlementMaster
 from nifty_iv.ivcal.quant_v3 import black_forward,black_greeks,implied_vol,trailing_rv,yang_zhang_rv,forward_variance
+from nifty_iv.core import cli
 
 TARIFF_VERSION='nse-2026-11-statutory-v1'   # bump when a dated rate is added or changed
 ENTRY_WINDOWS=('09:46','09:47','09:48','09:49','09:50')
@@ -1136,7 +1137,7 @@ CREATE INDEX marks_day ON marks(day);
 '''
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--cache',default='research_cache_v4.sqlite')
     ap.add_argument('--out',default='research_trades_v4.sqlite')
     ap.add_argument('--provider',choices=('rissin_upstox','thetrademarkk'),default='rissin_upstox')

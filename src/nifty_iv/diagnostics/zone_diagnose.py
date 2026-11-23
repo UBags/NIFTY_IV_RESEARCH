@@ -15,6 +15,7 @@ Periods: in-sample = before --split, out of sample = from it (the 2025-26 window
 import argparse,collections,sqlite3,statistics as stt
 import numpy as np
 from nifty_iv.zone import paths as zp
+from nifty_iv.core import cli
 
 DEFAULT='bull,naked,0;bull,futures_zone,0;bull,naked,-2;bear,naked,-2'
 K=(1,2,3,5,9,18,27,45,90)
@@ -84,7 +85,7 @@ def profiles(tr,name,split):
         print(f"{pname:15}{cells}")
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',default='zone_paths_levels.sqlite');ap.add_argument('--split',default='2025-01-01');ap.add_argument('--strategies',default=DEFAULT)
     a=ap.parse_args(argv);db=sqlite3.connect(f'file:{a.paths}?mode=ro',uri=True)
     context(db)

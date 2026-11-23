@@ -29,6 +29,7 @@ import time
 from collections import Counter
 from pathlib import Path
 import nifty_iv
+from nifty_iv.core import cli
 
 # Third-party imports are deferred so --help works before installation.
 
@@ -458,7 +459,7 @@ def plan(files, limit=10):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = cli.Parser(description=__doc__)
     parser.add_argument("--root", type=Path, default=nifty_iv.DATA_ROOT)
     parser.add_argument("--scope", choices=("nifty", "all"), default="nifty")
     parser.add_argument("--file-glob", help="Optional glob matched against relative Parquet path")

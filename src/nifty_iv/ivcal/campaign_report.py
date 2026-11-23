@@ -7,6 +7,7 @@ import argparse,csv,json,sqlite3,statistics
 from contextlib import closing
 from collections import defaultdict
 from pathlib import Path
+from nifty_iv.core import cli
 
 def summarise(rows):
     n=len(rows);out=dict(campaigns=n,closed=sum(r['status']!='unresolved' for r in rows))
@@ -40,7 +41,7 @@ def paired(rows):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--trades',required=True);p.add_argument('--out',default='campaign_report_v4');a=p.parse_args()
+    p=cli.Parser(description=__doc__);p.add_argument('--trades',required=True);p.add_argument('--out',default='campaign_report_v4');a=p.parse_args()
     with closing(sqlite3.connect(a.trades)) as db:   # one row per economic trade: parameter aliases must not count twice
         rows=[json.loads(r[0]) for r in db.execute('SELECT details FROM trades GROUP BY economic_id')]
     groups=defaultdict(list)

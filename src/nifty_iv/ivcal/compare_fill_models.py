@@ -9,6 +9,7 @@ import argparse,json,math,sqlite3,statistics
 from collections import defaultdict
 from contextlib import closing
 from pathlib import Path
+from nifty_iv.core import cli
 
 def load(path):
     with closing(sqlite3.connect(path)) as db:
@@ -59,7 +60,7 @@ def compare(runs,sessions=None,eval_start=None,eval_end=None):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--runs',nargs='+',required=True);p.add_argument('--cache',required=True,help='Supplies the session calendar, so flat days count');p.add_argument('--eval-start',required=True);p.add_argument('--eval-end',required=True);p.add_argument('--out',default='fill_model_comparison.json');a=p.parse_args()
+    p=cli.Parser(description=__doc__);p.add_argument('--runs',nargs='+',required=True);p.add_argument('--cache',required=True,help='Supplies the session calendar, so flat days count');p.add_argument('--eval-start',required=True);p.add_argument('--eval-end',required=True);p.add_argument('--out',default='fill_model_comparison.json');a=p.parse_args()
     
     with closing(sqlite3.connect(a.cache)) as c:sessions=[r[0] for r in c.execute('SELECT day FROM spot_daily ORDER BY day')]
     report=compare([x.split('=',1) for x in a.runs],sessions,a.eval_start,a.eval_end);Path(a.out).write_text(json.dumps(report,indent=2));print(json.dumps(report,indent=2))

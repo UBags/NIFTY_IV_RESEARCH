@@ -5,8 +5,9 @@ SE of an annualised Sharpe over Y years is about sqrt((1+SR^2/504)/Y), Lo (2002)
 a true Sharpe near 1.645*SE. Probability of detecting a true Sharpe is printed beside it."""
 import argparse,math
 from scipy.special import ndtr
+from nifty_iv.core import cli
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--sessions',default='43,63,109,126,252,504,756');p.add_argument('--true-sharpes',default='.5,1,1.5,2,3')
+    p=cli.Parser(description=__doc__);p.add_argument('--sessions',default='43,63,109,126,252,504,756');p.add_argument('--true-sharpes',default='.5,1,1.5,2,3')
     a=p.parse_args();sh=[float(x) for x in a.true_sharpes.split(',')]
     print('sessions years needed_sharpe_5pct '+' '.join(f'power@{s}' for s in sh))
     for n in map(int,a.sessions.split(',')):

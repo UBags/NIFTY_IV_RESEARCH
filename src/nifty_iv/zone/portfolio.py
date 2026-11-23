@@ -58,6 +58,7 @@ import numpy as np
 from nifty_iv.zone import grid as zg
 from nifty_iv.zone import rules as zr
 from nifty_iv.core import strategy_spec as ss
+from nifty_iv.core import cli
 
 CAPITAL=2_500_000.
 MARGIN={'futures_zone':.12,'futures_expiry':.12,'naked':.12,'naked_m1':.12,'naked_m2':.12,'calendar':.04}   # --margin-model rates (assumed shares of notional)
@@ -818,7 +819,7 @@ def parse_lots(text,lots):
     return sorted(out)
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--grid',required=True,help='nifty-zone-grid output directory');ap.add_argument('--paths',required=True,help='the zone_paths.sqlite the grid was built from')
     ap.add_argument('--out',default='portfolio');ap.add_argument('--capital',type=float,default=CAPITAL)
     ap.add_argument('--target',type=float,default=.22,help='overall yearly return on capital (pre-tax)');ap.add_argument('--floor',type=float,help='minimum return in every judged calendar year (default 0.70 x --target, V4.9.7)')

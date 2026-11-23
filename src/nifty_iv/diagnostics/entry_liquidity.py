@@ -17,6 +17,7 @@ import numpy as np
 from nifty_iv.zone import signals as zs
 from nifty_iv.zone import backtest as zb
 from nifty_iv.diagnostics import trade_ledger as tl
+from nifty_iv.core import cli
 
 def bar_index(bars,signal):
     day,t=signal.split()[:2];e=zs.minute_of(t)
@@ -42,7 +43,7 @@ def diagnose(sim,bars,k,side,structure,level):
                 lot=lot,want_units=want,want_lots=want//lot if want and lot else None,filled=pair is not None,reason=why,windows=rows)
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',required=True);ap.add_argument('--options',required=True);ap.add_argument('--spot',required=True)
     ap.add_argument('--ledger',help='<out>_trades.csv: diagnose its not-filled rows (all rows with --all)');ap.add_argument('--all',action='store_true')
     ap.add_argument('--strategy',help='side,structure,level for --signal');ap.add_argument('--signal',action='append',default=[],help='"YYYY-MM-DD HH:MM" (signal bar close)')

@@ -10,6 +10,7 @@ Per index unit and per rupee of entry scenario capital. Capital and payoffs diff
 import argparse,json,math,sqlite3,statistics as st
 from collections import Counter,defaultdict
 from contextlib import closing
+from nifty_iv.core import cli
 
 def side(db,spec,hedge='none'):
     parts=spec.split(':');where='structure=? AND exit_policy=? AND hedge=?';args=parts[:2]+[hedge]
@@ -47,6 +48,6 @@ def compare(a,b):
         note='naive_t ignores overlap between entries and overstates significance. Unresolved trades carry conservative marks, not realized returns')
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--trades',required=True);p.add_argument('--a',required=True);p.add_argument('--b',required=True);p.add_argument('--hedge',default='none');a=p.parse_args()
+    p=cli.Parser(description=__doc__);p.add_argument('--trades',required=True);p.add_argument('--a',required=True);p.add_argument('--b',required=True);p.add_argument('--hedge',default='none');a=p.parse_args()
     with closing(sqlite3.connect(a.trades)) as db:print(json.dumps(compare(side(db,a.a,a.hedge),side(db,a.b,a.hedge)),indent=2))
 if __name__=='__main__':main()

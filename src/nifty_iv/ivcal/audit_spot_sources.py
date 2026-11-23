@@ -2,6 +2,7 @@
 """Read-only: every NIFTY spot file in market_data against the one the cache uses. Exit 1 on unexplained differences."""
 import argparse,json,sys
 from nifty_iv.data.research_cache import connect
+from nifty_iv.core import cli
 
 CANON='india-index-options-1m/index/NIFTY.parquet'
 FILES="""SELECT f.file_id,f.dataset,f.relative_path,f.status,COUNT(*),MIN(b.trading_day)::text,MAX(b.trading_day)::text
@@ -12,7 +13,7 @@ FROM market_data.spot_bars a JOIN market_data.spot_bars b ON a.bar_time=b.bar_ti
 WHERE a.symbol='NIFTY' AND a.source_file_id=%s AND b.source_file_id=%s"""
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--tolerance',type=float,default=.05);p.add_argument('--out',default='spot_source_report.json');a=p.parse_args()
+    p=cli.Parser(description=__doc__);p.add_argument('--tolerance',type=float,default=.05);p.add_argument('--out',default='spot_source_report.json');a=p.parse_args()
     with connect() as pg,pg.cursor() as c:
         c.execute(FILES);rows=[dict(zip(('file_id','dataset','relative_path','status','bars','first_day','last_day'),r)) for r in c.fetchall()]
         canon=[r for r in rows if r['relative_path']==CANON and r['status']=='completed']

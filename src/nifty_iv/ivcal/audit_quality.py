@@ -3,9 +3,10 @@
 import argparse,sqlite3,json,csv
 from collections import defaultdict,Counter
 from pathlib import Path
+from nifty_iv.core import cli
 
 def main():
-    a=argparse.ArgumentParser(description=__doc__)
+    a=cli.Parser(description=__doc__)
     a.add_argument('--cache',default='research_cache_v4.sqlite')
     a.add_argument('--trades',default=None)
     a.add_argument('--out',default='coverage_v4')

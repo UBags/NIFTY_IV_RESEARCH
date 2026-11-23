@@ -32,6 +32,7 @@ from nifty_iv.ivcal.calendar_research import fill_detail
 from nifty_iv.core.contract_specs import LotMaster
 from nifty_iv.zone import signals as zs
 from nifty_iv.core import strategy_spec as ss
+from nifty_iv.core import cli
 
 PROVIDERS=('rissin_upstox','thetrademarkk')
 STRUCTURES=('naked','calendar');OFFSETS=(-200,-100,0,100,200);TPS=(None,.25,.4,.5,.6,.75)
@@ -300,7 +301,7 @@ def add_common(ap):
     ap.add_argument('--offset-mode',choices=('points','levels'),default='points',help='levels (V4.9.6): side-aware strikes, green PE at ATM - level x step, red CE at ATM + level x step; step 50 / 100 / 200 below 5,000 / 12,000 / above')
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);add_common(ap)
+    ap=cli.Parser(description=__doc__);add_common(ap)
     ap.add_argument('--options',required=True,help='zone_options.sqlite from nifty-zone-contracts');ap.add_argument('--out',default='zone_trades.sqlite')
     ap.add_argument('--split',default='2025-01-01',help='Extra valuation dates besides each 1 January, comma separated')
     ap.add_argument('--slippage',type=float,default=.5);ap.add_argument('--brokerage',type=float,default=20.);ap.add_argument('--max-participation',type=float,default=.10)

@@ -14,6 +14,7 @@ Per strategy, two tables:
 import argparse,csv,sqlite3,sys
 import numpy as np
 from nifty_iv.zone import paths as zp
+from nifty_iv.core import cli
 
 EDGES=[0,12_500,25_000,37_500,50_000,75_000,100_000,125_000,150_000,175_000,200_000,225_000,250_000,275_000,300_000,325_000,350_000,float('inf')]
 DEFAULT=('bear,naked,-2','bear,naked,0','bear,naked,2','bull,naked,-2','bull,naked,0','bull,naked,2','bull,futures_zone,0','bear,futures_zone,0')
@@ -27,7 +28,7 @@ def trades(db,side,st,off,before):
     return np.array(mae),np.array(fin)
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',default='zone_paths_levels.sqlite');ap.add_argument('--before',default='2025-01-01')
     ap.add_argument('--groups',default=';'.join(DEFAULT),help='side,structure,level;... (default: the 8 strategies)')
     ap.add_argument('--out',default='dd_bins.csv')

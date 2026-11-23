@@ -1457,7 +1457,7 @@ class ExitAtSameBarV4912(GridV491):
         class B:
             def __init__(s,day,start,end,close):s.day,s.start,s.end,s.close=day,start,end,close
         bars=[B('2024-01-02',555,600,100.),B('2024-01-02',600,645,100.),B('2024-01-02',645,690,100.)]
-        spot={'2024-01-02':np.full(375,100.)};spot['2024-01-02'][50]=98.9                       # 10:05: index 1.1 below the signal close
+        spot={'2024-01-02':np.full((3,375),100.)};spot['2024-01-02'][0,50]=98.9                 # 10:05: close 1.1 below the signal close
         class Sim:
             lc={};key=staticmethod(lambda c:c)
             def arrays(s,day):
@@ -1465,6 +1465,56 @@ class ExitAtSameBarV4912(GridV491):
                 return A()
         pair=dict(entry_index=100.,held=(),cash=0.,units=50,day='2024-01-02',short_px=10.,bar=0)
         atr={15:np.array([1.,1.,1.])}
-        r=tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',(('profit','none'),('stop','atr15x1')))
+        r=tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',[('profit','none','close'),('stop','atr15x1','close')])
         self.assertEqual(r[:3],(1,50,'stop'))                                                   # bar 1 (10:00-10:45), minute index 50 = 10:05
-        self.assertIsNone(tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',(('profit','none'),('stop','atr15x1.5'))))
+        self.assertIsNone(tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',[('profit','none','close'),('stop','atr15x1.5','close')]))
+        spot['2024-01-02'][2,48]=98.4                                                           # 10:03: only the minute's LOW is 1.6 below
+        r=tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bull',[('disaster','atr15x1.5','extreme'),('stop','atr15x1','close')])
+        self.assertEqual(r,(1,48,'disaster','atr15x1.5','extreme'))                             # the resting stop sees the low, before the 10:05 close
+        r=tl.intrabar_trigger(Sim(),atr,bars,spot,pair,('2024-01-02',44),0,2,'bear',[('disaster','atr15x1.5','extreme')])
+        self.assertIsNone(r)                                                                    # a bear trade's worst price is the high
+        self.assertIsNone(tl.check_intrabar_stop('none'));self.assertEqual(tl.check_intrabar_stop('mult2'),'mult2')
+        with self.assertRaises(SystemExit):tl.check_intrabar_stop('ptime5')
+    def test_intrabar_stop_on_bar_close_strategy(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        p,_,_=self._grid();keys=[(sd,'naked',0.,'zone_only_tw2','none','none') for sd in ('bull','bear')]
+        nb=tl.ledger(str(p),self.op,self.sp,keys,end='2025-01-01',cfg=pcfg())
+        for stop in ('mult1.02','mloss0.01','pct0.1'):
+            ds=tl.ledger(str(p),self.op,self.sp,keys,end='2025-01-01',cfg=pcfg(),intrabar_stop=stop)
+            self.assertEqual(len(ds),len(nb))
+            for a,b in zip(nb,ds):
+                if a['status']!='closed':continue
+                self.assertLessEqual(abs(b['gross_pnl_rs']-b['charges_rs']-b['net_pnl_rs']),2)
+                if b['exit_reason'].startswith('intrabar_stop:'):
+                    self.assertLessEqual(b['exit_first_fill'],a['exit_first_fill']);self.assertIsNone(b['check_rupees'])
+                else:self.assertEqual(b['net_pnl_rs'],a['net_pnl_rs']);self.assertLessEqual(abs(b['check_rupees']),1)
+        self.assertTrue(any(r['exit_reason'].startswith('intrabar_stop:') for r in tl.ledger(str(p),self.op,self.sp,keys,end='2025-01-01',cfg=pcfg(),intrabar_stop='mloss0.01')))       # the synthetic premium only decays, so a mult stop never fires
+
+class CliV4912(unittest.TestCase):
+    """V4.9.12 (user): every command prints its full command line with defaults, and --help lists every argument."""
+    def test_command_echo_and_help(self):
+        import io,contextlib
+        from nifty_iv.core import cli
+        ap=cli.Parser(prog='x');ap.add_argument('pos');ap.add_argument('--a',type=float,default=.5,help='alpha');ap.add_argument('--b');ap.add_argument('--c',action='store_true')
+        ap.add_argument('--d',action='append');ap.add_argument('--e',choices=('p','q'),default='p')
+        err=io.StringIO()
+        with contextlib.redirect_stderr(err):ns=ap.parse_args(['f.csv','--d','u','--d','v w'])
+        out=err.getvalue()
+        self.assertIn("command: x f.csv --a 0.5 --d u --d 'v w' --e p",out);self.assertIn('not set / off: --b --c',out)
+        h=ap.format_help();self.assertIn('alpha [default: 0.5]',h);self.assertIn('one of: p | q',h);self.assertIn('flag, off unless given',h)
+    def test_every_zone_and_diagnostic_argument_has_a_description(self):
+        import importlib,argparse
+        from unittest import mock
+        missing=[]
+        for mod in ('zone.paths','zone.grid','zone.portfolio','zone.contracts','zone.spot','zone.signals','zone.coverage','zone.holdout','zone.backtest',
+                    'diagnostics.trade_ledger','diagnostics.reinvest_sim','diagnostics.entry_liquidity','diagnostics.stop_compare','diagnostics.equity_dd_scan',
+                    'diagnostics.strategy_scan','diagnostics.pair_exits','diagnostics.dd_cutoffs','diagnostics.dd_bins','diagnostics.dd_recovery','diagnostics.zone_diagnose'):
+            m=importlib.import_module('nifty_iv.'+mod);seen=[]
+            def grab(self_,*a,**k):seen.append(self_);raise SystemExit(0)
+            with mock.patch.object(argparse.ArgumentParser,'parse_args',grab),mock.patch.object(argparse.ArgumentParser,'parse_known_args',grab):
+                try:m.main([]) if 'argv' in m.main.__code__.co_varnames[:m.main.__code__.co_argcount] else m.main()
+                except SystemExit:pass
+            for ap in seen:
+                for a in ap._actions:
+                    if not a.help and not isinstance(a,argparse._HelpAction):missing.append(f'{mod}: {"/".join(a.option_strings) or a.dest}')
+        self.assertEqual(missing,[])

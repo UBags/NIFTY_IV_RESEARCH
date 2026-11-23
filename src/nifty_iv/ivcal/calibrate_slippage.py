@@ -11,6 +11,7 @@ from collections import defaultdict
 from pathlib import Path
 import numpy as np
 from nifty_iv.ivcal.candidate_core import dte
+from nifty_iv.core import cli
 
 def model_slip(base,tenor,volume):
     return base*(max(tenor,7)/7)**.5*(1+2/max(1,volume)**.5)
@@ -19,7 +20,7 @@ BUCKETS=((1,3,'1-3d'),(4,8,'4-8d'),(9,21,'9-21d'),(22,45,'22-45d'),(46,75,'46-75
 def bucket(d):return next((b for a,z,b in BUCKETS if a<=d<=z),None)
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
+    p=cli.Parser(description=__doc__)
     p.add_argument('--cache',required=True);p.add_argument('--provider',default='rissin_upstox');p.add_argument('--out',default='slippage_calibration')
     p.add_argument('--slippage',type=float,default=.5);p.add_argument('--minute',default='09:47',help='Cached minute to sample');p.add_argument('--max-days',type=int,default=250)
     a=p.parse_args()

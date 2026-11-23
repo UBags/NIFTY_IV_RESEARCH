@@ -2,9 +2,10 @@
 """Read-only query plans for one month of the extract. Run on a bounded month before any tuning."""
 import argparse,calendar,datetime as dt
 from nifty_iv.data.research_cache import connect,DAILY_SQL,DAILY_RV_SQL,SPOT_SQL,OPT_SQL,TIMES
+from nifty_iv.core import cli
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__);p.add_argument('--month',required=True,help='YYYY-MM');a=p.parse_args()
+    p=cli.Parser(description=__doc__);p.add_argument('--month',required=True,help='YYYY-MM');a=p.parse_args()
     y,m=map(int,a.month.split('-'));s=dt.date(y,m,1);e=dt.date(y,m,calendar.monthrange(y,m)[1]);T=[dt.time.fromisoformat(x) for x in TIMES]
     with connect() as g,g.cursor() as c:
         c.execute('SET TRANSACTION READ ONLY')

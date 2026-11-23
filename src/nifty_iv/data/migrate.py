@@ -5,9 +5,10 @@ No modifications to the active Parquet importer or market_data objects.
 """
 import argparse,hashlib,os
 from pathlib import Path
+from nifty_iv.core import cli
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
+    p=cli.Parser(description=__doc__)
     p.add_argument('--dry-run',action='store_true');p.add_argument('--status',action='store_true')
     a=p.parse_args()
     migrations=sorted((Path(__file__).parent/'migrations').glob('*.sql'))

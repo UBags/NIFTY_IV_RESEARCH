@@ -20,6 +20,7 @@ from nifty_iv.ivcal.calendar_research import hedge_cost
 from nifty_iv.core.contract_specs import LotMaster
 from nifty_iv.zone import signals as zs
 from nifty_iv.zone import backtest as zb
+from nifty_iv.core import cli
 
 def days_between(a,b):return (dt.date.fromisoformat(b)-dt.date.fromisoformat(a)).days
 
@@ -95,7 +96,7 @@ class Futures:
         return self.trades
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--spot',required=True);ap.add_argument('--options',help='zone_options.sqlite: expiry listing for futures_expiry and lot sizes');ap.add_argument('--out',default='zone_futures.sqlite')
     ap.add_argument('--from-date',default='2021-06-01');ap.add_argument('--to-date',default='2026-07-01');ap.add_argument('--split',default='2025-01-01')
     ap.add_argument('--rules',default='futures_zone,futures_expiry');ap.add_argument('--stops',default='none,15,30,45');ap.add_argument('--atr-mult',type=float,default=1.)

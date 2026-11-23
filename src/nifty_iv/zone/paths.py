@@ -47,6 +47,7 @@ from nifty_iv.core.contract_specs import LotMaster
 from nifty_iv.zone import signals as zs
 from nifty_iv.zone import backtest as zb
 from nifty_iv.core import strategy_spec as ss
+from nifty_iv.core import cli
 
 OPTION_STRUCTURES=ss.NAKED_STRUCTURES+('calendar',);FUTURES_STRUCTURES=('futures_zone','futures_expiry')
 SLOTS=8   # trading sessions of an exit whose closing state is stored
@@ -83,7 +84,7 @@ def fill_prices(o,h,l,c,mode):
 class DayArrays:
     """One session of the extraction as numpy arrays per contract: buy and sell fill prices (see fill_prices),
     close and volume by minute index; a minute is tradable when open > 0 and volume > 0."""
-    __slots__=('buy','sell','close','vol','px')
+    __slots__=('buy','sell','close','vol','px','high','low')
     def __init__(self,day_dict,mode='ohlc4'):
         acc={}
         for minute,quotes in day_dict.items():
@@ -93,9 +94,10 @@ class DayArrays:
                 a=acc.get(key)
                 if a is None:a=acc[key]=np.zeros((5,NMIN))
                 a[:,i]=(o or 0.,h or 0.,l or 0.,c or 0.,v or 0)
-        self.buy={};self.sell={};self.close={};self.vol={}
+        self.buy={};self.sell={};self.close={};self.vol={};self.high={};self.low={}
         for k,a in acc.items():
             self.buy[k],self.sell[k]=fill_prices(a[0],a[1],a[2],a[3],mode);self.close[k]=a[3];self.vol[k]=np.where((a[0]>0)&(a[4]>0),a[4],0.)
+            self.high[k]=a[1];self.low[k]=a[2]
         self.px=self.buy
 
 def load_day(db,day,mode='ohlc4'):
@@ -103,18 +105,19 @@ def load_day(db,day,mode='ohlc4'):
     one with more volume is kept (ties: the first row read), exactly as zone_backtest.Market.day does."""
     rows=db.execute('SELECT minute,expiry,strike,cp,COALESCE(open,0),COALESCE(high,0),COALESCE(low,0),COALESCE(close,0),COALESCE(volume,0) FROM opt_1m WHERE day=? ORDER BY provider,minute',(day,)).fetchall()
     d=DayArrays.__new__(DayArrays)
-    if not rows:d.px=d.buy={};d.sell={};d.close={};d.vol={};return d
+    if not rows:d.px=d.buy={};d.sell={};d.close={};d.vol={};d.high={};d.low={};return d
     minute,e,k,cp,o,h,l,c,v=zip(*rows);kid={}
     ids=np.fromiter((kid.setdefault((x,float(y),z),len(kid)) for x,y,z in zip(e,k,cp)),np.int64,len(rows))
     mi=np.fromiter(((int(m[:2])*60+int(m[3:5]))-zs.OPEN for m in minute),np.int64,len(rows))
     o,h,l,c,v=(np.asarray(x,dtype=float) for x in (o,h,l,c,v))
     keep=(mi>=0)&(mi<NMIN);order=np.lexsort((np.arange(len(rows)),-v,mi,ids))
     order=order[keep[order]];first=np.ones(len(order),bool);first[1:]=(ids[order][1:]!=ids[order][:-1])|(mi[order][1:]!=mi[order][:-1])
-    r=order[first];K=len(kid);pb=np.zeros((K,NMIN));ps=np.zeros((K,NMIN));cl=np.zeros((K,NMIN));vo=np.zeros((K,NMIN))
-    b_,s_=fill_prices(o[r],h[r],l[r],c[r],mode);pb[ids[r],mi[r]]=b_;ps[ids[r],mi[r]]=s_;cl[ids[r],mi[r]]=c[r]
+    r=order[first];K=len(kid);pb=np.zeros((K,NMIN));ps=np.zeros((K,NMIN));cl=np.zeros((K,NMIN));vo=np.zeros((K,NMIN));hi=np.zeros((K,NMIN));lo=np.zeros((K,NMIN))
+    b_,s_=fill_prices(o[r],h[r],l[r],c[r],mode);pb[ids[r],mi[r]]=b_;ps[ids[r],mi[r]]=s_;cl[ids[r],mi[r]]=c[r];hi[ids[r],mi[r]]=h[r];lo[ids[r],mi[r]]=l[r]
     vo[ids[r],mi[r]]=np.where((o[r]>0)&(v[r]>0),v[r],0.)
     d.buy={key:pb[i] for key,i in kid.items()};d.sell={key:ps[i] for key,i in kid.items()};d.px=d.buy
     d.close={key:cl[i] for key,i in kid.items()};d.vol={key:vo[i] for key,i in kid.items()}
+    d.high={key:hi[i] for key,i in kid.items()};d.low={key:lo[i] for key,i in kid.items()}
     return d
 
 class PathSim:
@@ -533,7 +536,7 @@ def config(a):
         target_fraction=getattr(a,'target_fraction',1.),entry_bars=getattr(a,'entry_bars',1),entry_minutes=getattr(a,'entry_minutes',None))
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter);zb.add_common(ap)
+    ap=cli.Parser(description=__doc__);zb.add_common(ap)
     ap.add_argument('--options',required=True,help='zone_options.sqlite from nifty-zone-contracts');ap.add_argument('--out',default='zone_paths.sqlite')
     ap.add_argument('--structures',default='naked,calendar,futures_zone,futures_expiry',help='also naked_m1 (current-month monthly >= 21 days) and naked_m2 (next-month monthly), if planned in the extraction')
     ap.add_argument('--slippage',type=float,default=.5);ap.add_argument('--brokerage',type=float,default=20.);ap.add_argument('--max-participation',type=float,default=.20,help='share of each minute\'s traded volume an order may take (V4.9.7 default 0.20)')

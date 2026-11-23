@@ -9,6 +9,7 @@ from itertools import groupby
 import numpy as np
 from nifty_iv.ivcal.quant_v3 import parity_ols
 from nifty_iv.ivcal.quant_fast_v3 import invert_and_greeks
+from nifty_iv.core import cli
 
 def t_years(expiry,ts):
     when=dt.datetime.fromisoformat(ts).replace(tzinfo=dt.timezone(dt.timedelta(hours=5,minutes=30)))
@@ -35,7 +36,7 @@ def vendor_concordance(db,points=2.,fraction=.03):
     return compared,discordant
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--cache',default='research_cache_v4.sqlite')
     ap.add_argument('--rate',type=float,default=.06)
     ap.add_argument('--min-pair-volume',type=int,default=1)

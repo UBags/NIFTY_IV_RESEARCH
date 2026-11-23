@@ -21,6 +21,7 @@ from pathlib import Path
 import numpy as np
 from nifty_iv.zone import grid as zg
 from nifty_iv.zone import rules as zr
+from nifty_iv.core import cli
 
 _prange=zg._prange
 def _scan_kernel_py(ts,cptr,cbar,pix,gx,XB,V,M,yi,C,R,Y):
@@ -112,7 +113,7 @@ def evaluate(keys,paths,holidays=(),gap_policy='busy',start='2000-01-01',end='20
     return out
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',required=True);ap.add_argument('--holidays',help='the exchange holiday list the grid uses (weekend exits)')
     ap.add_argument('--grid',help='optional: a grid folder, to take its holidays and gap policy (and check they match --holidays)')
     ap.add_argument('--capital',type=float,default=2.5e6,help="base of every percentage (default 25 lakh; 1041667 = one strategy's 5/12 allocation)")

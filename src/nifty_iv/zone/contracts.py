@@ -18,6 +18,7 @@ from types import SimpleNamespace
 from nifty_iv.data.research_cache import connect
 from nifty_iv.zone import signals as zs
 from nifty_iv.zone import backtest as zb
+from nifty_iv.core import cli
 
 LISTING_SQL='''SELECT DISTINCT to_char(b.trading_day,'YYYY-MM-DD'),f.dataset,to_char(b.expiry,'YYYY-MM-DD')
 FROM market_data.option_bars b JOIN market_data.import_files f ON f.file_id=b.source_file_id
@@ -67,7 +68,7 @@ def plan_targets(bars,final,sig,listing,a):
     return out,sim.counts
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);zb.add_common(ap)
+    ap=cli.Parser(description=__doc__);zb.add_common(ap)
     ap.add_argument('--out',default='zone_options.sqlite');ap.add_argument('--buffer-sessions',type=int,default=3)
     ap.add_argument('--strike-pad',type=int,default=0,help='Also extract calendar strikes within this many points (multiples of 100) of the planned ones')
     ap.add_argument('--structures',default='naked,calendar',help='option structures to plan for: naked, naked_m1 (current-month monthly >= 21 days), naked_m2 (next-month monthly), calendar (V4.9.6)')

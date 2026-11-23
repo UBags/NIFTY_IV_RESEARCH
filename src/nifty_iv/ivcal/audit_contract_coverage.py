@@ -11,6 +11,7 @@ from nifty_iv.ivcal.candidate_core import dte,is_quote,nearest_short,nearest_lon
 import statistics
 from nifty_iv.ivcal.calendar_research import Data,CLOSE_WINDOW,ENTRY_WINDOWS,quote_fill,synchronized_fills,execute_fills,required_volume,resolve_volume_unit,validate_config
 from nifty_iv.core.contract_specs import LotMaster
+from nifty_iv.core import cli
 
 STAGES=('session_eligible','short_expiry_listed','short_signal_0945','long_signal_0945','any_independent_liquid_print','any_synchronous_liquid_print',
         'fill_model_eligible','lot_size_known','greeks_valid','signal_debit_positive','admitted')
@@ -60,7 +61,7 @@ def audit_day(data,cfg,day,step=500):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
+    p=cli.Parser(description=__doc__)
     p.add_argument('--cache',default='research_cache_v4.sqlite')
     p.add_argument('--provider',choices=('rissin_upstox','thetrademarkk'),default='rissin_upstox')
     p.add_argument('--long-tenors',default='60,90,120');p.add_argument('--tenor-tolerance',type=int,default=9)

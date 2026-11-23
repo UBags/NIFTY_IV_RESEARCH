@@ -13,6 +13,7 @@ Calmar is annualised P&L / max drawdown, both in rupees. Fills were checked for 
 import argparse,collections as C,csv,json,math,sqlite3,statistics as S,sys
 from pathlib import Path
 from nifty_iv.zone.legacy import report as zr
+from nifty_iv.core import cli
 
 def periods(lo,hi,months=12):
     out=[];y,m=int(lo[:4]),int(lo[5:7]);d=lo[8:]
@@ -23,7 +24,7 @@ def periods(lo,hi,months=12):
     return out
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--trades',required=True);ap.add_argument('--report',required=True,help='zone_report output folder (train_candidates.csv)')
     ap.add_argument('--lots',type=int,default=10);ap.add_argument('--top',type=int,default=3);ap.add_argument('--from-date',default='2021-06-01');ap.add_argument('--to-date',default='2025-01-01')
     ap.add_argument('--structure',default='all',help='naked, naked|atr30, futures_zone, ... or all (top N for each)');ap.add_argument('--out',default=None,help='CSV of every row printed')

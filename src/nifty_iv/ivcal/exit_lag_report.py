@@ -5,6 +5,7 @@ Reads only trades whose planned exit precedes --cutoff, so it cannot open a hold
 train_end_exclusive from rankings.json. Expiry eras follow each trade's short expiry, because an
 entry in late August 2025 can already be on a Tuesday contract."""
 import argparse,collections,json,math,sqlite3,statistics
+from nifty_iv.core import cli
 TUESDAY_FIRST='2025-09-01'
 
 def load(path,cutoff):
@@ -32,6 +33,6 @@ def report(rows):
     return out
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--trades',required=True);ap.add_argument('--cutoff',required=True,help='train_end_exclusive from rankings.json')
+    ap=cli.Parser(description=__doc__);ap.add_argument('--trades',required=True);ap.add_argument('--cutoff',required=True,help='train_end_exclusive from rankings.json')
     a=ap.parse_args();print(json.dumps(report(load(a.trades,a.cutoff)),indent=1))
 if __name__=='__main__':main()

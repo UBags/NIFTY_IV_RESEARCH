@@ -9,6 +9,7 @@ from __future__ import annotations
 import argparse,datetime as dt,hashlib,json,os,shutil,sqlite3
 from pathlib import Path
 import nifty_iv
+from nifty_iv.core import cli
 
 TIMES=['09:45','09:46','09:47','09:48','09:49','09:50',
        '11:30','11:31','11:32','13:30','13:31','13:32','15:15','15:16','15:17','15:29']
@@ -210,7 +211,7 @@ def extract(pg,sql,db,params,kind,digest,batch=10000):
 
 
 def main():
- ap=argparse.ArgumentParser(description=__doc__)
+ ap=cli.Parser(description=__doc__)
  ap.add_argument('--root',default=str(nifty_iv.DATA_ROOT))
  ap.add_argument('--from-date',default='2024-10-01');ap.add_argument('--to-date',default='2026-07-01')
  ap.add_argument('--out',default='research_cache_v4.sqlite')

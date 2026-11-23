@@ -41,6 +41,7 @@ Outputs: <out>_years.csv, <out>_daily.csv, <out>_summary.json and a printed tabl
 import argparse,collections,csv,datetime as dt,json,math,statistics,sys
 from pathlib import Path
 from nifty_iv import REPO_ROOT
+from nifty_iv.core import cli
 
 D=dt.date.fromisoformat
 LAKH=1e5
@@ -165,7 +166,7 @@ def ratios(daily,trades,info,start,end):
                 trades=len(ps),win_ratio=round(len(w)/len(ps),3) if ps else None,profit_factor=round(sum(w)/sum(l),2) if l else None,payoff=round((sum(w)/len(w))/(sum(l)/len(l)),2) if w and l else None)
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('trades',nargs='+',help='<out>_trades.csv from nifty-diag-trade-ledger (several are merged)')
     ap.add_argument('--holidays',default=str(REPO_ROOT/'config'/'nse_holidays.txt'))
     ap.add_argument('--start',help='first day (default: the first entry)');ap.add_argument('--end',help='last day (default: last money returned)')

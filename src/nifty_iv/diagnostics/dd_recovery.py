@@ -10,11 +10,12 @@ import argparse,csv,json,sqlite3,sys
 from pathlib import Path
 import numpy as np
 from nifty_iv.zone import paths as zp
+from nifty_iv.core import cli
 
 LEVELS=[25_000*i for i in range(1,15)]       # 25K .. 350K
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',default='zone_paths_levels.sqlite');ap.add_argument('--grid',default='zone_grid_v497',help='grid folder: its fill rates decide which groups are testable')
     ap.add_argument('--before',default='2025-01-01',help='entries before this date only (never the holdout)')
     ap.add_argument('--min-fill-rate',type=float,default=.75);ap.add_argument('--all',action='store_true',help='include groups below the fill-rate gate')

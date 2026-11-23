@@ -2,6 +2,7 @@
 """Size and power of spa_test on overlapping-campaign P&L (T10). Synthetic; no market data."""
 import argparse,numpy as np
 from nifty_iv.ivcal.stats import spa_test
+from nifty_iv.core import cli
 
 def campaigns(T,K,hold,rng):
     """Population-mean-zero daily differences from staggered multi-day positions sharing a factor.
@@ -34,7 +35,7 @@ def trade_book(T,K,hold,rng):
     return out
 
 def main():
-    a=argparse.ArgumentParser(description=__doc__)
+    a=cli.Parser(description=__doc__)
     a.add_argument('--runs',type=int,default=400);a.add_argument('--reps',type=int,default=400)
     a.add_argument('--days',type=int,default=300);a.add_argument('--models',type=int,default=30)
     a=a.parse_args()

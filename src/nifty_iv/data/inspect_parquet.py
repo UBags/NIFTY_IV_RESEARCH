@@ -22,6 +22,7 @@ import hashlib
 import json
 from pathlib import Path
 import sys
+from nifty_iv.core import cli
 
 
 FOCUS_COLUMNS = [
@@ -33,9 +34,8 @@ STATS_COLUMNS = ("timestamp", "datetime", "trading_day", "expiry", "strike")
 
 
 def cli():
-    p = argparse.ArgumentParser(
+    p = cli.Parser(
         description="Inspect NIFTY Parquet schemas and samples (READ ONLY; no database connection).",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="Output: SUMMARY.md, FILE_INVENTORY.csv, SCHEMA_CATALOG.json, SAMPLE_ROWS.json, ERRORS.json",
     )
     p.add_argument("--root", type=Path, default=Path.home() / "NIFTY Data",

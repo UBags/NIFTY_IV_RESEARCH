@@ -23,6 +23,7 @@ import numpy as np
 from nifty_iv.zone import grid as zg
 from nifty_iv.zone import rules as zr
 from nifty_iv.core import strategy_spec as ss
+from nifty_iv.core import cli
 
 CANDIDATES=['none','mloss1','mloss1.5','mloss2','mloss2.5','mloss3','mloss5','eatr15x1','eatr30x1','eatr30x1.5','eatr30x2','eatr45x1.5','eatr60x1','eatr60x2',
             'atr15x1','atr30x1.5','atr45x2','atr60x3','pct0.5','pct1','epct0.5','epct0.75','epct1','pts100','pts150','pts200','pts300',
@@ -74,7 +75,7 @@ def compare(paths,strategy,stops,holidays=(),gap_policy='busy',start='2000-01-01
     return out,max(check) if check else 0.,len(base)
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',required=True);ap.add_argument('--holidays');ap.add_argument('--gap-policy',choices=zg.GAP_POLICIES,default='busy')
     ap.add_argument('--strategy',action='append',required=True,help='side,structure,level,config,profit,stop: its stop is the current one (repeat)')
     ap.add_argument('--stops',help='comma-separated alternative stops (default: a fixed list of 50 across every stop family)')

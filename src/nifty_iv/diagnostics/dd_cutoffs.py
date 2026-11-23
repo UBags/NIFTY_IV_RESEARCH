@@ -23,6 +23,7 @@ import argparse,csv,datetime as dt,sqlite3,sys
 import numpy as np
 from nifty_iv.zone import paths as zp
 from nifty_iv.core import strategy_spec as ss
+from nifty_iv.core import cli
 
 CUTOFFS={'bear,naked,-2':5.,'bear,naked,0':3.75,'bear,naked,2':7.5,'bull,naked,-2':3.75,'bull,naked,0':5.,'bull,naked,2':3.75,
          'bull,futures_zone,0':7.5,'bear,futures_zone,0':5.}
@@ -62,7 +63,7 @@ def sequenced(tr,p):
 def years(lo,hi):return (dt.date.fromisoformat(hi)-dt.date.fromisoformat(lo)).days/365.
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',default='zone_paths_levels.sqlite');ap.add_argument('--split',default='2025-01-01');ap.add_argument('--start',help='first entry day (default: the earliest in the file)')
     ap.add_argument('--oos-end',default='2026-07-01');ap.add_argument('--cutoffs',help="override, e.g. 'bear,naked,-2=5;bull,naked,0=5' (percent of margin)")
     ap.add_argument('--optimise',action='store_true',help='also choose each cut-off on all the data from --levels (and none)')

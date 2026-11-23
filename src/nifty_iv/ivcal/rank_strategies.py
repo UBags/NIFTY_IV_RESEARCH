@@ -16,6 +16,7 @@ from scipy.special import ndtr,ndtri
 from nifty_iv.ivcal.stats import bootstrap_summary,spa_test
 from nifty_iv.core import lineage as lineage_mod
 from nifty_iv.ivcal.candidate_core import CAUSAL_FILL_MODELS,STRESS_FILL_MODELS
+from nifty_iv.core import cli
 
 TENORS=(5,15,30,45,60,75,90,120)
 STRATEGY_FIELDS=('mode','round_step','offset','long_tenor','hedge','policy','structure','dte_bucket','long_strike_offset')
@@ -536,7 +537,7 @@ def resolve_holdout_cutoff(value,split,sessions,rows):
 
 
 def main():
-    p=argparse.ArgumentParser(description=__doc__)
+    p=cli.Parser(description=__doc__)
     p.add_argument('--trades',default='research_trades_v4.sqlite');p.add_argument('--cache',default='research_cache_v4.sqlite')
     p.add_argument('--allow-conditional-fill-models',action='store_true')
     p.add_argument('--split',default='2026-01-01');p.add_argument('--embargo-days',type=int,default=35)

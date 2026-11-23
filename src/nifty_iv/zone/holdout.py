@@ -17,6 +17,7 @@ from nifty_iv.zone import grid as zg
 from nifty_iv.zone import rules as zr
 from nifty_iv.zone import portfolio as zp
 from nifty_iv.zone import signals as zs
+from nifty_iv.core import cli
 
 EXPECTED_BAR_ENDS=tuple(range(zs.OPEN+45,zs.CLOSE,45))+(zs.CLOSE,)   # a regular session: 45-minute bars ending 10:00 .. 15:15, then 15:30
 
@@ -101,7 +102,7 @@ def run(freeze_path,paths_db,out,to=None,holidays=(),acknowledge_repeat=False,pr
     return rep
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--freeze',required=True,help='portfolio_freeze.json from nifty-zone-portfolio');ap.add_argument('--paths',required=True,help='the zone_paths.sqlite of the freeze (covering the holdout)')
     ap.add_argument('--out',default='holdout');ap.add_argument('--to',help='optional check: must equal the frozen holdout end (exclusive)');ap.add_argument('--holidays')
     ap.add_argument('--acknowledge-repeat',action='store_true',help='run a freeze that was already evaluated (labelled a repeat)')

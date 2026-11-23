@@ -19,6 +19,7 @@ final_holdout evaluates exactly the frozen rows and records the inspection first
 from __future__ import annotations
 import argparse,collections,datetime as dt,hashlib,json,math,os,sqlite3,statistics,sys
 from pathlib import Path
+from nifty_iv.core import cli
 
 def digest(path):
     h=hashlib.sha256()
@@ -124,7 +125,7 @@ def audit_log():
     return Path(os.environ.get('NIFTY_HOLDOUT_LOG',Path.home()/'.nifty_research'/'holdout_inspections.jsonl'))
 
 def main():
-    ap=argparse.ArgumentParser(description=__doc__)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--trades',required=True);ap.add_argument('--split',default='2025-01-01');ap.add_argument('--start',default='2021-09-01',help='First entry day counted (EMA warm-up before it)')
     ap.add_argument('--min-trades',type=int,default=15);ap.add_argument('--tp-keep',type=float,default=.75);ap.add_argument('--out',default='zone_report')
     ap.add_argument('--mode',choices=('train','final_holdout'),default='train');ap.add_argument('--freeze');ap.add_argument('--end',default='9999-12-31')

@@ -17,6 +17,7 @@ Reads both files only."""
 import argparse,collections,csv,datetime as dt,sqlite3,sys
 from nifty_iv.core.contract_specs import monthly_like
 from pathlib import Path
+from nifty_iv.core import cli
 
 def dte_bucket(d):
     if d is None:return 'none'
@@ -70,7 +71,7 @@ def tenor_main(a):
     print(f'-> {out}/coverage_tenor.csv');O.close()
 
 def main(argv=None):
-    ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',default='zone_paths.sqlite');ap.add_argument('--options',default='zone_options_wide.sqlite')
     ap.add_argument('--out',default='coverage');ap.add_argument('--no-history',action='store_true',help='skip the one full scan of opt_1m for other days of each missing contract')
     ap.add_argument('--tenor-check',action='store_true',help='only: how often a current-month monthly with >= 21 days (H1) and the next-month monthly (H2) are listed, per year, on all days and on signal entry days (V4.9.3)')
