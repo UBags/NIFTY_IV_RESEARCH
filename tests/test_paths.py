@@ -1588,3 +1588,59 @@ class LossFundingV4912(unittest.TestCase):
     def test_zero_leverage_keeps_the_line(self):
         Y,_,info=self._run([('2023-03-01','2023-03-03',1e6),('2024-03-01','2024-03-04',-2e5)],lev=0.)
         self.assertAlmostEqual(Y[1]['fd_withdrawn_rs'],2e5);self.assertAlmostEqual(Y[1]['line_next_year_rs'],2.5e6)
+
+class TradeStructureV4912(GridV491):
+    """V4.9.12: exit baskets, period statistics, walk-forward entry sizing."""
+    def _data(self,keys,pairs=(('none','none'),('none','time1'),('ptime3','none'))):
+        from nifty_iv.diagnostics import trade_structure as ts
+        p,_,_=self._grid();D=zg.Detail(str(p),(),'busy');self.addCleanup(D.close)
+        return ts,D,p,[ts.StrategyData(D,k,list(pairs),'2025-01-01',1.) for k in keys]
+    def test_single_exit_basket_reproduces_the_grid_trades(self):
+        ts,D,p,data=self._data([('bull','naked',0.,'zone_only_tw2','none','time1')])
+        s=data[0];tr=ts.simulate(s,[s.ref]*3,'2000-01-01','2025-01-01')
+        ref=D.trades(dict(side='bull',structure='naked',offset=0.,config='zone_only_tw2',profit='none',stop='time1'),'2000-01-01','2025-01-01',value_to='2025-01-01')
+        self.assertEqual([t['signal'] for t in tr],[x['signal_bar'] for x in ref])
+        for t,x in zip(tr,ref):self.assertAlmostEqual(t['pnl'],x['unit']*x['units'],4)
+    def test_basket_pnl_is_the_slice_average_and_waits_for_every_slice(self):
+        ts,D,p,data=self._data([('bull','naked',0.,'zone_only_tw2','none','none')])
+        s=data[0];a=s.pairs.index(('none','none'));b=s.pairs.index(('none','time1'))
+        tr=ts.simulate(s,[a,b],'2000-01-01','2025-01-01')
+        for t in tr:
+            i=s.index[t['signal']];self.assertAlmostEqual(t['pnl'],(s.P[a,i]+s.P[b,i])/2*s.units[i],4)
+        busy=-1
+        for t in tr:self.assertGreater(t['signal'],busy);i=s.index[t['signal']];busy=max(s.XB[a,i],s.XB[b,i])
+    def test_period_returns_sum_to_the_total_and_search_never_worse_than_reference(self):
+        ts,D,p,data=self._data([('bull','naked',0.,'zone_only_tw2','none','none'),('bear','naked',0.,'zone_only_tw2','none','none')])
+        T=[t for s in data for t in ts.simulate(s,[s.ref]*2,'2000-01-01','2025-01-01')]
+        pr=ts.period_returns(T,'quarter',1e6);self.assertAlmostEqual(sum(pr.values()),sum(t['pnl'] for t in T)/1e6,8)
+        ref={s.name:[s.ref]*2 for s in data}
+        r0=ts.objective(ts.stats(T,'half',1e6,'2023-01-01','2025-01-01'),0.)
+        bk,obj=ts.search(data,2,'half',1e6,'2023-01-01','2025-01-01',0.,rounds=2)
+        self.assertGreaterEqual(obj,r0-1e-12)
+    def test_meta_sizing_is_walk_forward_and_ranks_an_informative_feature(self):
+        from nifty_iv.diagnostics import trade_structure as ts
+        rnd=np.random.default_rng(5);T=[]
+        for k in range(300):
+            y=2018+k//50;d=dt.date(y,1,1)+dt.timedelta(days=int(k%50)*7);x=rnd.normal(size=10);pnl=float(2*x[0]+rnd.normal())
+            T.append(dict(strategy='s',entry=d.isoformat(),exit=(d+dt.timedelta(days=3)).isoformat(),pnl=pnl,legs=[((d+dt.timedelta(days=3)).isoformat(),pnl)],features=x,mult=1.))
+        seen=[];orig=ts.logistic_fit
+        def spy(X,y,lam=1.,**k):seen.append(len(y));return orig(X,y,lam)
+        ts.logistic_fit=spy
+        try:rep=ts.size_meta(T,[4,8,12],min_train=30)
+        finally:ts.logistic_fit=orig
+        fitted=[r for r in rep if r['fitted']];self.assertTrue(fitted)
+        for r in fitted:self.assertEqual(r['train'],sum(t['exit']<f"{r['year']}-01-01" for t in T))   # only trades closed before the year
+        self.assertFalse(rep[0]['fitted'])                                                          # the first year has no history
+        tr=ts.tier_report(T,'2019','2030');self.assertGreater(tr['high']['mean_pnl'],tr['low']['mean_pnl'])
+        self.assertTrue(all(t['mult'] in (1/3,2/3,1.) for t in T))
+    def test_leave_one_year_out_runs_and_excluded_year_is_not_scored(self):
+        ts,D,p,data=self._data([('bull','naked',0.,'zone_only_tw2','none','none'),('bear','naked',0.,'zone_only_tw2','none','none')])
+        s=data[0];T=ts.simulate(s,[s.ref],'2000-01-01','2025-01-01',exclude='2024')
+        self.assertEqual(T,[])                                                                      # every fixture trade is in 2024
+        rows=ts.leave_one_year_out(data,2,'half',1e6,'2024-01-01','2025-01-01',0.,rounds=1)
+        self.assertEqual([r['year'] for r in rows],['2024']);self.assertEqual(len(rows[0]['chosen']),2)
+    def test_all_periods_keeps_partial_periods(self):
+        from nifty_iv.diagnostics import trade_structure as ts
+        self.assertEqual(ts.all_periods('2023-06-01','2024-01-10','quarter'),['2023Q2','2023Q3','2023Q4','2024Q1'])
+        self.assertEqual(ts.all_periods('2021-09-01','2025-01-01','half'),['2021H2','2022H1','2022H2','2023H1','2023H2','2024H1','2024H2'])
+        self.assertEqual(ts.all_periods('2025-01-01','2026-07-01','half'),['2025H1','2025H2','2026H1'])

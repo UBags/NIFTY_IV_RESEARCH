@@ -2,7 +2,7 @@
 
 **A research system for testing whether a trend-and-swing signal on the NIFTY index can be turned into option-selling strategies, using real minute-by-minute option prices.**
 
-> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_12.md`), and 648 synthetic tests pass.
+> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_12.md`), and 656 synthetic tests pass.
 
 ---
 
@@ -448,7 +448,7 @@ timeline
 
 ```bash
 python -m pip install -e ".[fast,test]"     # package + console scripts; numba (fast) optional
-python -m pytest                             # 648 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
+python -m pytest                             # 656 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
 
 export PGHOST=localhost PGPORT=5432 PGDATABASE=nifty_data PGUSER=postgres
 read -rs -p 'PostgreSQL password: ' PGPASSWORD; echo; export PGPASSWORD
@@ -490,6 +490,9 @@ nifty-diag-trade-ledger --paths zone_paths_levels.sqlite --options zone_options_
     --max-participation 0.25 --entry-minutes 225 --entry-bars 6 \
     --strategy bull,naked,-1,N3_k1.25_m8_j1.5_tw2,ptime5,atr15x1 \
     --strategy bear,naked,-2,N5_k0.25_m12_j0.25_tw5,ptime7,eatr30x1.5 --out ledger
+nifty-diag-trade-structure --paths zone_paths_levels.sqlite --holidays ../config/nse_holidays.txt \
+    --strategy bull,naked,-1,N3_k1.25_m8_j1.5_tw2,ptime5,atr15x1 --strategy bear,naked,-2,N5_k0.25_m12_j0.25_tw5,ptime7,eatr30x1.5 \
+    --baskets 5 --period half --min-annual 0.35 --out ts   # exit baskets + entry sizing, judged on half-year stability
 nifty-diag-entry-liquidity --paths zone_paths_levels.sqlite --options zone_options_levels.sqlite --spot zone_spot.sqlite \
     --ledger ledger_trades.csv --target-fraction 1   # minute volume per entry window: why an entry filled or not
 nifty-diag-reinvest ledger_trades.csv --out reinvest   # defaults: FD 31.25 L at 6.25%, line 0.8:1 at 10%, tax 35%, year-end reinvestment;
@@ -530,7 +533,7 @@ flowchart LR
             z4[legacy: futures · report · summary]
         end
         subgraph DIAG["diagnostics"]
-            g1[strategy_scan · equity_dd_scan · trade_ledger · stop_compare]
+            g1[strategy_scan · equity_dd_scan · trade_ledger · stop_compare · trade_structure]
             g2[reinvest_sim · entry_liquidity · dd_cutoffs · dd_bins · dd_recovery]
             g3[zone_diagnose · pair_exits]
         end
