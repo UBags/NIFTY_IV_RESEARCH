@@ -1322,3 +1322,14 @@ class TradeLedgerV4912(GridV491):
         with mock.patch.object(zg.Detail,'trades',trades):rows=tl.ledger(str(p),self.op,self.sp,[key],end='2025-01-01',cfg=pcfg())
         self.assertEqual(rows[0]['status'],'unvalued');self.assertTrue(all(r['status']!='unvalued' for r in rows[1:]))
         y=tl.years(rows);self.assertEqual(sum(d['trades'] for d in y),len(rows)-1);self.assertEqual(sum(d['unvalued_trades'] for d in y),1)
+    def test_ledger_replays_at_the_full_budget(self):
+        from nifty_iv.diagnostics import trade_ledger as tl;from nifty_iv.core import strategy_spec as ss
+        p,_,_=self._grid();key=('bull','naked',0.,'zone_only_tw2','none','none')
+        rows=tl.ledger(str(p),self.op,self.sp,[key],end='2025-01-01',cfg=pcfg(target_margin=2.5e6),target_fraction=1.)
+        ok=[r for r in rows if r['status'] in ('closed','open_at_data_end')];self.assertTrue(ok)
+        for r in ok:
+            day=r['entry_first_fill'][:10];self.assertEqual(r['lots'],ss.max_lots(day,r['lot_size'],2.5e6));self.assertLessEqual(r['margin_rs'],2.5e6)
+            self.assertIsNone(r['check_rupees']);self.assertLessEqual(abs(r['gross_pnl_rs']-r['charges_rs']-r['net_pnl_rs']),2)
+        thin=tl.ledger(str(p),self.op,self.sp,[key],end='2025-01-01',cfg=pcfg(target_margin=2.5e9),target_fraction=1.)   # far beyond any minute's volume
+        self.assertTrue(all(r['status']=='not_filled_at_size' for r in thin))
+        b=tl.brief(ok[0]);self.assertEqual(list(b)[:6],['strategy','side','year','status','option','entry_time'])

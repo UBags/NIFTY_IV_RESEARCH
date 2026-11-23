@@ -84,9 +84,15 @@ def charges_sum(recs):
         out['mkt_notional']+=abs(r['units'])*r['px'];out['fill_notional']+=abs(r['units'])*r['actual']
     return out
 
-def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None):
-    """Rows (one per trade) for strategies [(side, structure, level, config, profit, stop)]."""
+def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None):
+    """Rows (one per trade) for strategies [(side, structure, level, config, profit, stop)]. target_fraction: replay every trade at
+    ceil(fraction x the margin-table lots on the paths' --target-margin) instead of the size the paths file was built with (1 = the
+    whole budget); the signals and exit decision bars stay those of the paths file, see main's notes."""
     db=sqlite3.connect(f'file:{paths}?mode=ro',uri=True);cfg=cfg or config_from_meta(db);bars,final=bars_from_paths(db)
+    resized=target_fraction is not None
+    if resized:
+        if not getattr(cfg,'target_margin',None):raise SystemExit('--target-fraction needs a paths file built with --target-margin')
+        cfg=SimpleNamespace(**dict(vars(cfg),target_fraction=float(target_fraction)))
     pinfo={}
     for side,st,off,sb,lot,units,strike,sexp,eday,epx,eix in db.execute('SELECT side,structure,offset,signal_bar,lot,units,strike,short_expiry,entry_day,entry_short_px,entry_index FROM paths'):
         pinfo[side,st,float(off),sb]=dict(lot=lot,units=units,strike=strike,expiry=sexp,entry_day=eday,entry_px=epx,entry_index=eix)
@@ -109,13 +115,16 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                                          entry_first_fill=x['entry_day'],exit_reason=x['reason'],note='no value in the paths file; excluded from totals, as in the scans'));continue
                     sim.cap_log.clear();sim.slice_log.clear();sim.settle_log.clear();sim.memo.clear();rec.clear()
                     pair,why=sim.open_pair(t,side,st,float(off))
-                    if pair is None:raise SystemExit(f'replay of {key} signal bar {t} did not fill ({why}); the paths file says it did')
+                    if pair is None:
+                        if not resized:raise SystemExit(f'replay of {key} signal bar {t} did not fill ({why}); the paths file says it did')
+                        rows.append(dict(strategy='|'.join(map(str,key)),side=side,year=x['entry_day'][:4],status='not_filled_at_size',signal=f"{bars[t].day} {zs.hhmm(bars[t].end)}",
+                                         entry_first_fill=x['entry_day'],exit_reason=why,note='the larger size could not fill (full size or nothing); excluded from totals'));continue
                     ent=list(rec);rec.clear()
                     legs=list(pair['held']);want=abs(pair['units'])
                     e_first,e_last=entry_minutes(sim.cap_log,legs,want)
                     xc,xbar,xday,xforced,ok,_,_,last_fill,_=sim.exit(pair['held'],k,pair['lot'])
                     units=pair['units'];lot=pair['lot'];c0=pair['held'][0][0]
-                    stored=x['unit']*x['units'];open_end=(not ok) or bool(x['hypothetical'])       # exit not complete inside the data: valued at its mark, as the paths file does
+                    stored=x['unit']*(abs(pair['units']) if resized else x['units']);open_end=(not ok) or bool(x['hypothetical'])       # exit not complete inside the data: valued at its mark, as the paths file does
                     ex=[] if open_end else list(rec)
                     if open_end:sim.slice_log.clear();sim.settle_log.clear();last_fill=None;xc=stored-pair['cash'];xday=dt.date.fromisoformat(min(x['exit_day'],end)).toordinal()
                     E=charges_sum(ent);X=charges_sum(ex);net=pair['cash']+xc
@@ -143,7 +152,7 @@ def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='20
                         slippage_rs=round(E['slippage']+X['slippage']),gross_pnl_rs=round(gross),
                         brokerage_rs=round(E['brokerage']+X['brokerage']),gst_rs=round(E['gst']+X['gst']),stt_rs=round(E['stt']+X['stt']),other_charges_rs=round(E['other']+X['other']),
                         charges_rs=round(E['total']+X['total']),net_pnl_rs=round(net),days_held=days,interest_rs=round(interest),net_after_interest_rs=round(net-interest),
-                        forced_exit=bool(xforced) and not open_end,open_at_data_end=open_end,check_rupees=round(net-stored,2)))
+                        forced_exit=bool(xforced) and not open_end,open_at_data_end=open_end,exit_spilled_bars=max(0,int(xbar)-k-1),check_rupees=None if resized else round(net-stored,2)))
     finally:zp.fill_detail=orig;market.close()
     return rows
 
@@ -152,7 +161,7 @@ def years(rows,rate=.10):
     """Per strategy and calendar year of entry: valued trades summed; unvalued trades counted (a year with only unvalued trades still appears)."""
     g=collections.defaultdict(list);unv=collections.Counter()
     for r in rows:
-        if r['status']=='unvalued':unv[r['strategy'],r['year']]+=1;g.setdefault((r['strategy'],r['year']),[])
+        if r['status'] in ('unvalued','not_filled_at_size'):unv[r['strategy'],r['year']]+=1;g.setdefault((r['strategy'],r['year']),[])
         else:g[r['strategy'],r['year']].append(r)
     out=[]
     for (s,y),rs in sorted(g.items()):
@@ -169,22 +178,34 @@ def parse_strategy(s):
     if len(p)!=6:raise SystemExit(f'--strategy needs side,structure,level,config,profit,stop: {s}')
     return (p[0],p[1],float(p[2]),p[3],p[4],p[5])
 
+BRIEF=(('strategy','strategy'),('side','side'),('year','year'),('status','status'),('option','option'),('entry_time','entry_first_fill'),('entry_completed','entry_last_fill'),
+       ('entry_price','entry_price_filled'),('lots','lots'),('lot_size','lot_size'),('margin_rs','margin_rs'),('exit_reason','exit_reason'),('exit_time','exit_last_fill'),
+       ('exit_price','exit_price_filled'),('settlement_price','settlement_price'),('slippage_rs','slippage_rs'),('brokerage_rs','brokerage_rs'),('stt_rs','stt_rs'),
+       ('gst_and_other_rs',None),('pnl_rs','net_pnl_rs'),('days_held','days_held'),('interest_rs','interest_rs'),('pnl_after_interest_rs','net_after_interest_rs'))
+def brief(r):
+    out={k:r.get(src,'') for k,src in BRIEF if src}
+    out['gst_and_other_rs']=(r['gst_rs']+r['other_charges_rs']) if 'gst_rs' in r else ''
+    return {k:out[k] for k,_ in BRIEF}
+
 def main(argv=None):
     ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument('--paths',required=True);ap.add_argument('--options',required=True,help='the option extraction the paths were built from');ap.add_argument('--spot',required=True)
     ap.add_argument('--strategy',action='append',required=True,help='side,structure,level,config,profit,stop (repeat)')
     ap.add_argument('--holidays');ap.add_argument('--gap-policy',choices=zg.GAP_POLICIES,default='busy')
     ap.add_argument('--start',default='2000-01-01');ap.add_argument('--end',default='2026-07-01');ap.add_argument('--rate',type=float,default=.10,help='interest a year on margin (default 10%%)')
+    ap.add_argument('--target-fraction',type=float,help='replay at ceil(this x the margin-table lots on the paths\' budget) instead of the paths\' size (1 = the whole budget). '
+                    'Signals and exit decision bars stay those of the paths file; an entry that cannot fill at the larger size is listed and excluded')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
-    rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate)
+    rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction)
     if not rows:sys.exit('no trades')
     yr=years(rows,a.rate)
-    for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr)):
+    for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr),(f'{a.out}_brief.csv',[brief(r) for r in rows])):
         keys=list(dict.fromkeys(k for r in data for k in r))
         with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
-    val=[r for r in rows if r['status']!='unvalued'];unv=[r for r in rows if r['status']=='unvalued']
-    bad=[r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
+    resized=a.target_fraction is not None
+    val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];skip=[r for r in rows if r not in val]
+    bad=[] if resized else [r for r in val if not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
     for s in dict.fromkeys(r['strategy'] for r in rows):
         print(f'\n=== {s} ===')
@@ -192,10 +213,16 @@ def main(argv=None):
         for d in yr:
             if d['strategy']!=s:continue
             print(f"{d['year']:<6}{d['trades']:>7}{d['gross_pnl_rs']:>20,.0f}{rs(d['slippage_rs'])}{rs(d['brokerage_rs'])}{d['gst_rs']:>10,.0f}{d['stt_rs']:>10,.0f}{d['other_charges_rs']:>10,.0f}"
-                  f"{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{rs(d['avg_margin_rs'] or 0)}{(d['net_pct_of_avg_margin'] or 0):>13.1f}%" + (f"  ({d['unvalued_trades']} unvalued)" if d['unvalued_trades'] else ''))
-    print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(unv)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
-    print(f'-> {a.out}_trades.csv, {a.out}_years.csv  (net = after slippage and all charges; % avg margin = net after interest / average margin per trade)')
-    for r in unv:print(f"  unvalued: {r['strategy']} signal {r['signal']} entry {r['entry_first_fill']} ({r['exit_reason']})")
+                  f"{rs(d['interest_rs'])}{rs(d['net_after_interest_rs'])}{rs(d['avg_margin_rs'] or 0)}{(d['net_pct_of_avg_margin'] or 0):>13.1f}%" + (f"  ({d['unvalued_trades']} excluded)" if d['unvalued_trades'] else ''))
+    if resized:
+        sp=sum(1 for r in val if r.get('exit_spilled_bars'))
+        print(f"\nReplayed at {a.target_fraction:g} x the margin-table lots: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
+              f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete. "
+              "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")
+    else:
+        print(f"\n{len(val)} valued trades ({opn} still open at the data end, valued at their mark), {len(skip)} unvalued (excluded, as in the scans); replay check (net cash vs paths file): {len(val)-len(bad)} match" + (f", {len(bad)} DIFFER (see check_rupees)" if bad else ''))
+    print(f'-> {a.out}_trades.csv, {a.out}_years.csv, {a.out}_brief.csv  (pnl = after slippage and all charges; % avg margin = net after interest / average margin per trade)')
+    for r in skip:print(f"  {r['status']}: {r['strategy']} signal {r['signal']} entry {r['entry_first_fill']} ({r['exit_reason']})")
     if bad:sys.exit(1)
 
 if __name__=='__main__':main()
