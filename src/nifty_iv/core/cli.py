@@ -51,7 +51,7 @@ MODULE_HELP={
  'nifty_iv.zone.backtest':{'--atr-mult':'V4.6 engine: stop distance from the signal close, in ATRs',
                            '--structures':'comma-separated structures for the V4.6 engine (naked, calendar)'},
  'nifty_iv.diagnostics.trade_ledger':{'--start':'first entry day included (YYYY-MM-DD)','--end':'entries before this day; trades still open are valued to it (YYYY-MM-DD)'},
- 'nifty_iv.diagnostics.reinvest_sim':{'--fd-rate':'FD interest a year (compounded quarterly)',
+ 'nifty_iv.diagnostics.reinvest_sim':{'--fd-rate':'FD interest a year, compounded quarterly (also on FDs made from profits)',
                                       '--tax-rate':'income-tax rate on trading (business) income and FD interest, e.g. 0.30',
                                       '--carry-years':'years a business loss may be carried forward against later business income'},
  'nifty_iv.diagnostics.entry_liquidity':{'--all':'diagnose every valued trade of --ledger, not only the entries that could not fill',

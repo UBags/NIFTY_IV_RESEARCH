@@ -1371,7 +1371,7 @@ class ReinvestSimV4912(unittest.TestCase):
         from nifty_iv.diagnostics import reinvest_sim as rs
         import datetime as dt
         T=[dict(strategy='s',side='bull',entry=dt.date.fromisoformat(e),exit=dt.date.fromisoformat(x),ret=rs.next_trading_day(dt.date.fromisoformat(x),set()),margin=m,pnl=p) for e,x,m,p in trades]
-        return rs,rs.simulate(T,dt.date(2023,1,2),dt.date(2024,12,31),fd_rate=0.,line_rate=0.,**k)
+        return rs,rs.simulate(T,dt.date(2023,1,2),dt.date(2024,12,31),fd0=3e6,fd_rate=0.,line_rate=0.,**k)
     def test_profit_goes_to_fd_and_raises_the_line_after_tax(self):
         rs,(Y,daily,info)=self._sim([('2023-03-01','2023-03-03',2.5e6,1e6),('2024-03-01','2024-03-04',2.5e6,1e6)],tax_rate=.3)
         self.assertAlmostEqual(Y[0]['tax_rs'],3e5);self.assertAlmostEqual(Y[0]['to_new_fd_rs'],7e5)
@@ -1387,7 +1387,7 @@ class ReinvestSimV4912(unittest.TestCase):
         from nifty_iv.diagnostics import reinvest_sim as rs
         import datetime as dt
         T=[dict(strategy='s',side='bull',entry=dt.date(2023,3,1),exit=dt.date(2023,3,3),ret=dt.date(2023,3,6),margin=2.5e6,pnl=1e6)]
-        Y,daily,info=rs.simulate(T,dt.date(2023,1,2),dt.date(2024,6,30),fd_rate=.07,line_rate=0.,tax_rate=.35)
+        Y,daily,info=rs.simulate(T,dt.date(2023,1,2),dt.date(2024,6,30),fd0=3e6,fd_rate=.07,line_rate=0.,tax_rate=.35)
         dec31=[r for r in daily if r['day']=='2023-12-31'][0];jan1=[r for r in daily if r['day']=='2024-01-01'][0]
         self.assertLess(abs(jan1['wealth_rs']-dec31['wealth_rs']),dec31['fd_rs']*.0005)     # tax accrued in wealth, so paying it is no fall
         self.assertEqual(rs._taxable(-5e4,2e5,0),1.5e5);self.assertEqual(rs._taxable(1e5,2e4,3e4),9e4);self.assertEqual(rs._taxable(-3e5,2e5,0),0.)
@@ -1397,7 +1397,7 @@ class ReinvestSimV4912(unittest.TestCase):
         d=tempfile.mkdtemp();p=os.path.join(d,'t_trades.csv')
         with open(p,'w') as f:f.write('status,strategy,side,entry_day,exit_day,margin_rs,net_pnl_rs\nclosed,s,bull,2023-03-01,2023-03-03,2500000,100000\n')
         out=os.path.join(d,'r')
-        rs.main([p,'--leverage','4.0','--leverage-interest','0.12','--tax-rate','0','--fd-rate','0','--holidays','','--start','2023-01-02','--end','2023-12-31','--out',out])
+        rs.main([p,'--fd','3000000','--leverage','4.0','--leverage-interest','0.12','--tax-rate','0','--fd-rate','0','--holidays','','--start','2023-01-02','--end','2023-12-31','--out',out])
         S=json.load(open(out+'_summary.json'));Y=list(csv.DictReader(open(out+'_years.csv')))
         self.assertEqual(S['settings']['line'],1.2e7);self.assertEqual(S['settings']['line_rate'],.12)
         self.assertAlmostEqual(float(Y[0]['scale']),4.8);self.assertEqual(int(Y[0]['trading_pnl_rs']),480000)
@@ -1528,3 +1528,35 @@ class CliV4912(unittest.TestCase):
                 for a in ap._actions:
                     if not a.help and not isinstance(a,argparse._HelpAction):missing.append(f'{mod}: {"/".join(a.option_strings) or a.dest}')
         self.assertEqual(missing,[])
+
+class ConservativeExitsV4912(GridV491):
+    """V4.9.12 (user): ledger defaults to conservative exits (buy-backs at each minute's high), explicit slippage and brokerage."""
+    def test_adverse_buys_prices(self):
+        o,h,l,c=(np.array([10.,0.]),np.array([12.,0.]),np.array([9.,0.]),np.array([11.,0.]))
+        b,s=zp.fill_prices(o,h,l,c,'adverse_buys');self.assertEqual(b[0],12.);self.assertEqual(s[0],10.5)
+        self.assertEqual(b[1],0.);self.assertEqual(s[1],0.)                                    # no print: no price
+    def test_adverse_exits_cost_more_and_entries_unchanged(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        p,_,_=self._grid();keys=[('bull','naked',0.,'zone_only_tw2','none','none'),('bear','naked',0.,'zone_only_tw2','none','time1')]
+        import shutil,os;op=os.path.join(self.tmp.name,'o_hi.sqlite');shutil.copy(self.op,op)
+        d=sqlite3.connect(op);d.execute('UPDATE opt_1m SET high=high*1.05');d.commit();d.close()   # synthetic minutes are flat: give them a range
+        i0={};i1={}
+        a=tl.ledger(str(p),op,self.sp,keys,end='2025-01-01',cfg=pcfg(),info=i0)
+        b=tl.ledger(str(p),op,self.sp,keys,end='2025-01-01',cfg=pcfg(),exit_fill='adverse',info=i1)
+        self.assertTrue(i1['resized']);self.assertEqual(i1['changed'],{'fill_price':'adverse_buys'})
+        self.assertEqual([(r['strategy'],r['signal']) for r in a],[(r['strategy'],r['signal']) for r in b])
+        worse=0
+        for x,y in zip(a,b):
+            if x['status']!='closed':continue
+            self.assertEqual(x['entry_price_filled'],y['entry_price_filled'])                  # sales unchanged
+            self.assertLessEqual(y['net_pnl_rs'],x['net_pnl_rs']+1)                             # buy-backs never cheaper
+            if x['exit_price_filled'] is not None:self.assertGreaterEqual(y['exit_price_filled'],x['exit_price_filled']-1e-9);worse+=y['net_pnl_rs']<x['net_pnl_rs']
+            self.assertIsNone(y['check_rupees']);self.assertLessEqual(abs(y['gross_pnl_rs']-y['charges_rs']-y['net_pnl_rs']),2)
+        self.assertGreater(worse,0)
+    def test_overrides_equal_to_the_paths_file_keep_the_check(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        p,_,_=self._grid();info={}
+        rows=tl.ledger(str(p),self.op,self.sp,[('bull','naked',0.,'zone_only_tw2','none','none')],end='2025-01-01',cfg=pcfg(),overrides=dict(slippage=0.,brokerage=0.),info=info)
+        self.assertFalse(info['resized']);self.assertTrue(all(abs(r['check_rupees'])<=1 for r in rows if r['status']=='closed'))
+        info={};tl.ledger(str(p),self.op,self.sp,[('bull','naked',0.,'zone_only_tw2','none','none')],end='2025-01-01',cfg=pcfg(),overrides=dict(slippage=.5,brokerage=20.),info=info)
+        self.assertEqual(info['changed'],{'slippage':.5,'brokerage':20.})

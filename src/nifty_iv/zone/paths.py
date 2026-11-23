@@ -71,14 +71,16 @@ class Path_:
 
 NMIN=zs.CLOSE-zs.OPEN   # minutes 09:15..15:29
 
-FILL_PRICES=('ohlc4','adverse','open')
+FILL_PRICES=('ohlc4','adverse','open','adverse_buys')
 def fill_prices(o,h,l,c,mode):
     """(buy price, sell price) arrays for a fill-price model: ohlc4 = (O+H+L+C)/4 (open if a field is missing);
-    adverse = the minute's high for buys and low for sells (stress); open = the minute's open."""
+    adverse = the minute's high for buys and low for sells (stress); open = the minute's open; adverse_buys (V4.9.12) = the
+    minute's high for buys, ohlc4 for sells: for a naked short, conservative exits (buy-backs) and unchanged entries."""
     allpos=(o>0)&(h>0)&(l>0)&(c>0)
     if mode=='ohlc4':x=np.where(allpos,(o+h+l+c)/4,o);return x,x
     if mode=='adverse':return np.where(h>0,h,o),np.where(l>0,l,o)
     if mode=='open':return o,o
+    if mode=='adverse_buys':x=np.where(allpos,(o+h+l+c)/4,o);return np.where(h>0,h,o),x
     raise ValueError(f'unknown fill price model {mode}')
 
 class DayArrays:
@@ -543,7 +545,7 @@ def main():
     ap.add_argument('--max-exit-lag-bars',type=int,default=9);ap.add_argument('--forced-exit-haircut',type=float,default=.02)
     ap.add_argument('--slippage-points',type=float,default=1.,help='Futures: index points of slippage per unit per side')
     ap.add_argument('--cache-days',type=int,default=12,help='Option days kept in memory')
-    ap.add_argument('--fill-price',choices=FILL_PRICES,default='ohlc4',help='ohlc4 (default); adverse = high for buys, low for sells (stress); open')
+    ap.add_argument('--fill-price',choices=FILL_PRICES,default='ohlc4',help='ohlc4 (default); adverse = high for buys, low for sells (stress); open; adverse_buys = high for buys, ohlc4 for sells')
     ap.add_argument('--target-margin',type=float,help='Margin budget in rupees (e.g. 2500000): entry lots = ceil(--target-fraction x the whole lots whose upper-end margin from the strategy_spec margin table fits it on the fill day); overrides --target-units and --lots')
     ap.add_argument('--target-fraction',type=float,default=ss.TARGET_FRACTION,help='share of the budget\'s maximum lots one entry trades, rounded up (V4.9.7 default 0.40: a trader runs several strategies; 1 = V4.9.6)')
     ap.add_argument('--entry-bars',type=int,default=3,help='45-minute windows an entry may use to reach its full size (V4.9.7 default 3); full size or nothing; a roll re-entry uses one')

@@ -17,6 +17,14 @@ checked on every minute at the minute's worst price for the trade and filled fro
 only (the earlier figures). --exit-at same-bar also checks the strategy's own price rules on every minute's close. A trade exited
 intrabar has exit_reason intrabar_stop:<rule> or <part>_rule_intrabar:<rule>, and no check_rupees (the paths file has no such exit).
 
+Costs and fills (V4.9.12 defaults). Statutory charges follow the dated schedule in ivcal.calendar_research.fill_charges: STT on the
+sell-side premium (0.0625% to 2024-09-30, 0.10% to 2026-03-31, 0.15% from 2026-04-01), NSE transaction charges, SEBI fees, stamp duty
+on buys, GST 18% on brokerage + transaction + SEBI. --slippage (default Rs 0.5 per unit per side) is scaled by days to expiry and by
+the minute volume in lots (0.5 x sqrt(max(DTE, 7)/7) x (1 + 2/sqrt(lots)), so about Rs 0.5-1.5 on these contracts). --brokerage
+(default Rs 20) is charged per lot per side: an upper bound on Rs 20 per executed order, since every minute's slice is at least one
+lot. --exit-fill adverse (default): every buy-back fills at its minute's HIGH (plus slippage), every sale at the minute's
+(O+H+L+C)/4 less slippage; ohlc4 = buy-backs at (O+H+L+C)/4 too, which reproduces the paths file.
+
 Outputs: <out>_trades.csv (one row per trade), <out>_years.csv (per strategy and calendar year of entry), printed tables.
 Years 2025-26 were examined before (docs/CODEMAP_V4_9_11.md); 2026 = January-June."""
 import argparse,collections,csv,datetime as dt,json,math,sqlite3,sys
@@ -174,17 +182,23 @@ def charges_sum(recs):
         out['mkt_notional']+=abs(r['units'])*r['px'];out['fill_notional']+=abs(r['units'])*r['actual']
     return out
 
-def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None,exit_at='next-bar',intrabar_stop=None):
+def ledger(paths,options,spot,strategies,holidays=(),gap_policy='busy',start='2000-01-01',end='2026-07-01',rate=.10,cfg=None,target_fraction=None,overrides=None,exit_at='next-bar',intrabar_stop=None,exit_fill='ohlc4',info=None):
     """Rows (one per trade) for strategies [(side, structure, level, config, profit, stop)]. target_fraction: replay every trade at
     ceil(fraction x the margin-table lots on the paths' --target-margin) instead of the size the paths file was built with (1 = the
-    whole budget); the signals and exit decision bars stay those of the paths file, see main's notes."""
+    whole budget); the signals and exit decision bars stay those of the paths file, see main's notes. overrides: cfg fields replayed
+    with other values (max_participation, entry_minutes, entry_bars, slippage, brokerage). exit_fill 'adverse': buy-backs at each
+    minute's high. info (dict, optional) receives the settings that differ from the paths file and whether the replay is checked."""
     db=sqlite3.connect(f'file:{paths}?mode=ro',uri=True);cfg=cfg or config_from_meta(db);bars,final=bars_from_paths(db)
     overrides={k:v for k,v in (overrides or {}).items() if v is not None}
-    resized=target_fraction is not None or bool(overrides) or exit_at=='same-bar'   # replayed under other settings: no check against the paths file
+    if exit_fill=='adverse':overrides['fill_price']='adverse_buys'          # naked shorts only: every buy is a buy-back
+    elif exit_fill!='ohlc4':raise SystemExit(f'--exit-fill {exit_fill}: one of ohlc4, adverse')
+    changed={k:v for k,v in overrides.items() if getattr(cfg,k,None)!=v}
+    resized=target_fraction is not None or bool(changed) or exit_at=='same-bar'    # replayed under other settings: no check against the paths file
     if target_fraction is not None:
         if not getattr(cfg,'target_margin',None):raise SystemExit('--target-fraction needs a paths file built with --target-margin')
         cfg=SimpleNamespace(**dict(vars(cfg),target_fraction=float(target_fraction)))
-    if overrides:cfg=SimpleNamespace(**dict(vars(cfg),**overrides))
+    if changed:cfg=SimpleNamespace(**dict(vars(cfg),**changed))
+    if info is not None:info.update(changed=changed,resized=resized)
     pinfo={}
     for side,st,off,sb,lot,units,strike,sexp,eday,epx,eix in db.execute('SELECT side,structure,offset,signal_bar,lot,units,strike,short_expiry,entry_day,entry_short_px,entry_index FROM paths'):
         pinfo[side,st,float(off),sb]=dict(lot=lot,units=units,strike=strike,expiry=sexp,entry_day=eday,entry_px=epx,entry_index=eix)
@@ -330,17 +344,24 @@ def main(argv=None):
     ap.add_argument('--intrabar-stop',default=DEFAULT_INTRABAR_STOP,help='protective stop checked on every minute at the minute\'s worst price for the trade (as a resting stop order at the broker would be), '
                     'on top of the strategy\'s own rules; the exit fills from that minute. A stop rule: mloss X (loss >= X%% of margin; default mloss7.5), mult X (short option at X times its entry fill), '
                     'loss X (loss >= X%% of the credit), atr/eatr PxM, pct/epct X, pts X; none = off')
+    ap.add_argument('--exit-fill',choices=('adverse','ohlc4'),default='adverse',help='price of exit (buy-back) fills: adverse = each minute\'s high plus slippage (conservative); '
+                    'ohlc4 = the minute\'s (O+H+L+C)/4 plus slippage, as the paths file, the grid and the scans. Entries (sales) always fill at ohlc4 less slippage')
+    ap.add_argument('--slippage',type=float,default=.5,help='option slippage base, rupees per unit per side, scaled by days to expiry and minute volume (about Rs 0.5-1.5 on these contracts)')
+    ap.add_argument('--brokerage',type=float,default=20.,help='brokerage in rupees, charged per lot per side (an upper bound on a flat Rs 20 per executed order); '
+                    'STT, NSE transaction charges, SEBI fees, stamp duty and 18%% GST follow the dated statutory schedule')
     ap.add_argument('--out',default='trade_ledger')
     a=ap.parse_args(argv);hol=zr.read_holidays(a.holidays) if a.holidays else []
+    info={}
     rows=ledger(a.paths,a.options,a.spot,[parse_strategy(s) for s in a.strategy],hol,a.gap_policy,a.start,a.end,a.rate,target_fraction=a.target_fraction,
-              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars),exit_at=a.exit_at,intrabar_stop=a.intrabar_stop)
+              overrides=dict(max_participation=a.max_participation,entry_minutes=a.entry_minutes,entry_bars=a.entry_bars,slippage=a.slippage,brokerage=a.brokerage),
+              exit_at=a.exit_at,intrabar_stop=a.intrabar_stop,exit_fill=a.exit_fill,info=info)
     if not rows:sys.exit('no trades')
     rows.sort(key=lambda r:(r.get('entry_first_fill') or '',r['strategy']))                      # one time line across strategies
     yr=years(rows,a.rate)
     for name,data in ((f'{a.out}_trades.csv',rows),(f'{a.out}_years.csv',yr),(f'{a.out}_brief.csv',[brief(r) for r in rows])):
         keys=list(dict.fromkeys(k for r in data for k in r))
         with open(name,'w',newline='') as f:w=csv.DictWriter(f,keys);w.writeheader();w.writerows(data)
-    resized=a.target_fraction is not None or a.max_participation is not None or a.entry_minutes is not None or a.entry_bars is not None or a.exit_at=='same-bar'
+    resized=info['resized']
     val=[r for r in rows if r['status'] in ('closed','open_at_data_end')];skip=[r for r in rows if r not in val]
     bad=[] if resized else [r for r in val if r['check_rupees'] is not None and not abs(r['check_rupees'])<=1];opn=sum(r['status']=='open_at_data_end' for r in rows)
     rs=lambda v:f'{v:>12,.0f}'
@@ -364,7 +385,9 @@ def main(argv=None):
         sp=sum(1 for r in val if r.get('exit_spilled_bars'))
         how=(f'{a.target_fraction:g} x the margin-table lots' if a.target_fraction is not None else "the paths file's size")
         ib=sum(1 for r in val if 'intrabar' in str(r.get('exit_reason','')))
-        how+=(f', participation {a.max_participation:g}' if a.max_participation is not None else '')+(f', entry minutes {a.entry_minutes}' if a.entry_minutes is not None else '')+(f', entry windows {a.entry_bars}' if a.entry_bars is not None else '')+(', exits checked every minute (same-bar)' if a.exit_at=='same-bar' else '')
+        names=dict(max_participation='participation {:g}',entry_minutes='entry minutes {}',entry_bars='entry windows {}',slippage='slippage Rs {:g}',brokerage='brokerage Rs {:g} a lot')
+        for k_,v_ in info['changed'].items():how+=', '+("buy-backs at each minute's high (conservative)" if k_=='fill_price' else names.get(k_,k_+' {}').format(v_))
+        how+=(', exits checked every minute (same-bar)' if a.exit_at=='same-bar' else '')
         print(f"\nReplayed at {how}: {len(val)} trades valued ({opn} open at the data end, valued at the paths' mark per unit), "
               f"{sum(r['status']=='not_filled_at_size' for r in rows)} could not fill at that size, {sum(r['status']=='unvalued' for r in rows)} unvalued; {sp} exits needed more than one bar to complete{f'; {ib} exits triggered intrabar' if a.exit_at=='same-bar' else ''}. "
               "Signals and exit decision bars are those of the paths file (built at its own size): a trade that cannot fill would, in a full rerun, free the slot for a later signal.")

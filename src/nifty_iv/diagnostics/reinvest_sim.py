@@ -6,7 +6,8 @@ ledger's own 'interest_rs' is ignored and borrowing costs are recomputed here). 
 and charges) are those of the size the ledger replayed at; here they are scaled to each year's margin budget.
 
 Funding
-  * --fd (default Rs 30 L) sits in a fixed deposit at --fd-rate (default 7%), compounded quarterly; the FD keeps its own interest.
+  * --fd (default Rs 31.25 L, so that 0.8:1 gives a Rs 25 L line) sits in a fixed deposit at --fd-rate (default 6.25%), compounded
+    quarterly; the FD keeps its own interest. Tax defaults to 35% (--tax-rate), the line to 0.8:1 at 10% (--leverage, --leverage-interest).
   * A credit line of --leverage x the FD (default 0.8:1, e.g. --leverage 4.0) is available against it at --leverage-interest
     (default 10% a year, e.g. --leverage-interest 0.12), interest charged daily on the amount actually borrowed. --line sets the
     starting line in rupees instead (e.g. --line 2500000 for Rs 25 L on Rs 30 L); new FDs still add --leverage x their amount.
@@ -70,7 +71,7 @@ def load_trades(paths,hol):
 def year_of(d,mode):return d.year if mode=='calendar' else (d.year if d.month>=4 else d.year-1)
 def year_label(y,mode):return str(y) if mode=='calendar' else f'FY{y}-{str(y+1)[2:]}'
 
-def simulate(trades,start,end,fd0=3e6,line0=2.5e6,base_margin=2.5e6,leverage=.8,fd_rate=.07,line_rate=.10,tax_rate=.35,carry_years=8,year_mode='calendar'):
+def simulate(trades,start,end,fd0=3.125e6,line0=2.5e6,base_margin=2.5e6,leverage=.8,fd_rate=.0625,line_rate=.10,tax_rate=.35,carry_years=8,year_mode='calendar'):
     """Day-by-day simulation; returns (years, daily, trades with scale)."""
     base_margin=base_margin or 2.5e6
     fdq=(1+fd_rate/4)**(4/365)-1
@@ -170,12 +171,12 @@ def main(argv=None):
     ap.add_argument('trades',nargs='+',help='<out>_trades.csv from nifty-diag-trade-ledger (several are merged)')
     ap.add_argument('--holidays',default=str(REPO_ROOT/'config'/'nse_holidays.txt'))
     ap.add_argument('--start',help='first day (default: the first entry)');ap.add_argument('--end',help='last day (default: last money returned)')
-    ap.add_argument('--fd',type=float,default=3e6,help='starting FD in rupees (default 3,000,000)')
+    ap.add_argument('--fd',type=float,default=3.125e6,help='starting FD in rupees (0.8:1 on 31.25 L = a 25 L line, the budget the ledger is sized for)')
     ap.add_argument('--leverage',type=float,default=.8,help='credit line per rupee of FD, for the starting FD and every new one (default 0.8, i.e. 0.8:1)')
     ap.add_argument('--leverage-interest','--line-rate',dest='line_rate',type=float,default=.10,help='interest a year on the borrowed amount (default 0.10)')
     ap.add_argument('--line',type=float,help='starting line in rupees, instead of --leverage x --fd')
     ap.add_argument('--base-margin',type=float,default=2.5e6,help='margin budget the ledger was sized for (default 2,500,000)')
-    ap.add_argument('--fd-rate',type=float,default=.07)
+    ap.add_argument('--fd-rate',type=float,default=.0625)
     ap.add_argument('--tax-rate',type=float,default=.35);ap.add_argument('--carry-years',type=int,default=8)
     ap.add_argument('--year',choices=('calendar','fy'),default='calendar',help='tax and reinvestment year: calendar (default) or Indian financial year April-March')
     ap.add_argument('--out',default='reinvest')
@@ -196,7 +197,7 @@ def main(argv=None):
            total_tax_rs=round(sum(Y['tax_rs'] for Y in years)),carried_forward_loss_at_end_rs=round(info['carried_forward_loss_rs']),**R)
     json.dump(S,open(f'{a.out}_summary.json','w'),indent=1)
     L=lambda v:f'{v/LAKH:>10.2f}'
-    print(f"tax {a.tax_rate:.0%}, FD {a.fd/LAKH:.0f} L @ {a.fd_rate:.1%}, line {line0/LAKH:.2f} L @ {a.line_rate:.1%}, leverage {a.leverage:g}:1, sizes relative to {a.base_margin/LAKH:.0f} L; Rs lakh")
+    print(f"tax {a.tax_rate:.0%}, FD {a.fd/LAKH:.2f} L @ {a.fd_rate:.2%}, line {line0/LAKH:.2f} L @ {a.line_rate:.1%}, leverage {a.leverage:g}:1, sizes relative to {a.base_margin/LAKH:.0f} L; Rs lakh")
     print(f"{'year':<9}{'line':>10}{'size':>8}{'trades':>7}{'trading':>10}{'line int':>10}{'business':>10}{'FD int':>10}{'taxable':>10}{'tax':>10}{'loss c/f':>10}{'to FD':>10}{'new cap':>10}{'wealth':>10}{'over lim':>9}")
     for Y in years:
         print(f"{Y['year']:<9}{L(Y['line_rs'])}{Y['scale']:>7.2f}x{Y['trades']:>7}{L(Y['trading_pnl_rs'])}{L(Y['line_interest_rs'])}{L(Y['business_income_rs'])}{L(Y['fd_interest_rs'])}"

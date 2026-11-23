@@ -2,7 +2,7 @@
 
 **A research system for testing whether a trend-and-swing signal on the NIFTY index can be turned into option-selling strategies, using real minute-by-minute option prices.**
 
-> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_12.md`), and 639 synthetic tests pass.
+> **Status: research, not a trading system.** The prices are 1-minute OHLC candles, not bid/ask quotes. Margin comes from a scenario table, not live SPAN. Nothing here is validated trading evidence. The current version is `4.9.12-research` (see `src/nifty_iv/VERSION.txt` and `docs/CODEMAP_V4_9_12.md`), and 644 synthetic tests pass.
 
 ---
 
@@ -299,9 +299,11 @@ A path is simulated **once per (signal bar × side × structure × level)** and 
 | Option | Default | Effect |
 |---|---|---|
 | `--intrabar-stop` | `mloss7.5` | A protective stop resting at the broker, on top of the strategy's own rules. It is checked on every minute at the minute's worst price for the trade (option high for a short leg; index low on a bull trade, high on a bear trade) and fills from that same minute. `none` turns it off and reproduces bar-close-only results |
+| `--exit-fill` | `adverse` | Conservative exits: every buy-back fills at its minute's **high** plus slippage. `ohlc4` fills at (O+H+L+C)/4 plus slippage, as the paths file, the grid and the scans do. Sales (entries) always fill at (O+H+L+C)/4 less slippage |
+| `--slippage` / `--brokerage` | ₹0.5 / ₹20 | Slippage base per unit per side, scaled by days to expiry and minute volume (about ₹0.5–1.5 on these contracts). Brokerage per lot per side, an upper bound on a flat ₹20 per executed order. STT (0.15% of sell premium from April 2026), NSE, SEBI, stamp and 18% GST follow the dated statutory schedule |
 | `--exit-at` | `next-bar` | `same-bar` also checks the strategy's price-based rules (atr, eatr, pct, epct, pts, target, tpct, mloss, loss, tp, mult) on every minute's close, filling from the following minute. Time, trailing, zone-change and expiry exits stay at the bar close |
 
-The ledger can also replay at another size or with other fill settings (`--target-fraction`, `--max-participation`, `--entry-minutes`, `--entry-bars`). In every replay, the signals, the one-position sequencing and the bar-close exit decisions still come from the paths file. A trade that can no longer fill, or that exits earlier, does not free the slot for a later signal; only a paths rebuild models that.
+With these defaults a ledger run no longer matches the paths file trade for trade (it charges more on exits); `--exit-fill ohlc4` restores the match. The ledger can also replay at another size or with other fill settings (`--target-fraction`, `--max-participation`, `--entry-minutes`, `--entry-bars`). In every replay, the signals, the one-position sequencing and the bar-close exit decisions still come from the paths file. A trade that can no longer fill, or that exits earlier, does not free the slot for a later signal; only a paths rebuild models that.
 
 ---
 
@@ -446,7 +448,7 @@ timeline
 
 ```bash
 python -m pip install -e ".[fast,test]"     # package + console scripts; numba (fast) optional
-python -m pytest                             # 639 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
+python -m pytest                             # 644 synthetic tests (ZONE_NO_NUMBA=1 for the numpy path)
 
 export PGHOST=localhost PGPORT=5432 PGDATABASE=nifty_data PGUSER=postgres
 read -rs -p 'PostgreSQL password: ' PGPASSWORD; echo; export PGPASSWORD
@@ -490,7 +492,7 @@ nifty-diag-trade-ledger --paths zone_paths_levels.sqlite --options zone_options_
     --strategy bear,naked,-2,N5_k0.25_m12_j0.25_tw5,ptime7,eatr30x1.5 --out ledger
 nifty-diag-entry-liquidity --paths zone_paths_levels.sqlite --options zone_options_levels.sqlite --spot zone_spot.sqlite \
     --ledger ledger_trades.csv --target-fraction 1   # minute volume per entry window: why an entry filled or not
-nifty-diag-reinvest ledger_trades.csv --tax-rate 0.35 --leverage 0.8 --leverage-interest 0.10 --out reinvest   # FD-backed line, year-end reinvestment, tax: yearly table + ratios
+nifty-diag-reinvest ledger_trades.csv --out reinvest   # defaults: FD 31.25 L at 6.25%, line 0.8:1 at 10%, tax 35%, year-end reinvestment; yearly table + ratios
 ```
 
 Every command prints its full command line, with all defaults filled in, before it runs (to stderr, so it lands in `2>&1 | tee` logs). `--help` lists every argument with its meaning, accepted values and default.
