@@ -12,5 +12,12 @@ before --split, out of sample separately), ranked per side under drawdown caps.
 - 210-session synthetic fixture: 60 random strategies of 2,487 kept, drawdown and 2024 return equal the replay.
 - strategy_scan's group set-up moved to strategy_scan.prepare_group (shared); its tests unchanged and passing.
 
+New: `nifty-diag-trade-ledger` (src/nifty_iv/diagnostics/trade_ledger.py): each strategy's sequenced trades (zone_grid.Detail)
+replayed through PathSim with every fill recorded (minutes, market and filled price, slippage, brokerage, GST, STT, exchange / SEBI /
+stamp, settlements), margin from the strategy_spec table and interest at --rate on it for the days held.
+- TradeLedgerV4912: net cash of every replayed trade equals the paths file; gross (after slippage) - charges = net; yearly sums.
+- 210-session synthetic fixture: 5 strategies, 20 trades (zone flips, stops, profit rules, an expiry settlement, 2 open at the data
+  end): all 20 equal the paths file; the identity holds to the rupee.
+
 No grid or portfolio digest covers the changed files: existing zone_grid / portfolio outputs stay valid.
-`python -m pytest`: 611 pass (numpy and numba paths).
+`python -m pytest`: 614 pass (numpy and numba paths).

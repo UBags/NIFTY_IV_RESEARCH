@@ -1292,3 +1292,22 @@ class EquityDDMarksV4912(MarginStopV498):
         k=('bull','naked',0.,'zone_only_tw2','none','none');ref=eq.evaluate([k],str(f),'2025-01-01')[k]
         self.assertAlmostEqual(float(rows[('none','none')]['max_dd_rupees']),ref['max_dd'],delta=1.)
         self.assertGreaterEqual(float(rows[('none','none')]['max_dd_rupees']),120000-1)   # +30K high then a -90K mark: at least 120K from the peak
+
+class TradeLedgerV4912(GridV491):
+    """V4.9.12: the trade ledger replays each sequenced trade through the path engine; its net cash equals the paths file, and
+    gross (after slippage) - charges = net for every trade."""
+    def test_ledger_replay_matches_paths_and_adds_up(self):
+        from nifty_iv.diagnostics import trade_ledger as tl
+        p,_,_=self._grid()
+        rows=tl.ledger(str(p),self.op,self.sp,[('bull','naked',0.,'zone_only_tw2','none','none'),('bull','naked',0.,'zone_only_tw2','none','time1'),
+                                               ('bear','naked',0.,'zone_only_tw2','none','none')],end='2025-01-01',cfg=pcfg())
+        self.assertTrue(rows)
+        for r in rows:
+            self.assertLessEqual(abs(r['check_rupees']),1.)
+            self.assertLessEqual(abs(r['gross_pnl_rs']-r['charges_rs']-r['net_pnl_rs']),2)
+            self.assertGreaterEqual(r['days_held'],1);self.assertTrue(r['entry_first_fill'])
+            self.assertAlmostEqual(r['interest_rs'],r['margin_rs']*.10*r['days_held']/365,delta=1)
+        y=tl.years(rows)
+        for d in y:
+            rs=[r for r in rows if r['strategy']==d['strategy'] and r['year']==d['year']]
+            self.assertEqual(d['trades'],len(rs));self.assertEqual(d['net_after_interest_rs'],sum(r['net_after_interest_rs'] for r in rs))
