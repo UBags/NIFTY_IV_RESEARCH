@@ -173,12 +173,13 @@ class CommandV4913(Fixture):
 
 class CompositeV4913(unittest.TestCase):
     """User objective (2026-11-24): spread, post-tax target and post-tax return terms."""
-    C=dict(tax=.35,target=.20,ramp_from=None,range_floor=.05)
+    C=dict(tax=.35,target=.20,ramp_from=None,range_floor=.05,range_cap=.40)
     def test_post_tax_cagr_with_loss_set_off_by_hand(self):
         lab=['2022H1','2022H2','2023H1','2023H2','2024H1','2024H2'];v=np.array([.3,-.1,-.4,.1,.5,0.]);k=np.ones(6,bool)
         # 2022 +0.2 -> 0.13 after tax; 2023 -0.3 (carried forward); 2024 +0.5, 0.3 set off -> 0.5-0.35*0.2 = 0.43
         self.assertAlmostEqual(float(ws.post_tax_cagr(v,lab,k,3.,.35)),(1.13*.7*1.43)**(1/3)-1,14)
-        self.assertAlmostEqual(float(ws.composite(v,lab,k,3.,self.C)),8*((1.13*.7*1.43)**(1/3)-1),14)          # below 15%: return term only
+        self.assertAlmostEqual(float(ws.composite(v,lab,k,3.,self.C)),8*((1.13*.7*1.43)**(1/3)-1)-2.8,14)      # range 0.9 > 0.4: -2.8
+        self.assertAlmostEqual(float(ws.composite(v,lab,k,3.,dict(self.C,range_cap=1.))),8*((1.13*.7*1.43)**(1/3)-1),14)   # cap 1.0: return term only
         self.assertAlmostEqual(float(ws.composite(np.array([.2,.2]),lab[:2],np.ones(2,bool),1.,self.C)),.4/.05+2.8+8*.26,12)   # range 0 -> floor; 26% post-tax
         self.assertAlmostEqual(float(ws.composite(np.array([.15,.1]),lab[:2],np.ones(2,bool),1.,self.C)),8*.1625,12)   # 16.25% post-tax: neither binary term
         self.assertAlmostEqual(float(ws.composite(np.array([.15,.1]),lab[:2],np.ones(2,bool),1.,dict(self.C,ramp_from=.15))),2.8*(.1625-.15)/.05+8*.1625,12)   # optional ramp

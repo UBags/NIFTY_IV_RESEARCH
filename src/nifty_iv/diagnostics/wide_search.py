@@ -89,13 +89,13 @@ def post_tax_cagr(v,labels,keep,yrs,tax):
 
 def composite(v,labels,keep,yrs,c):
     """User objective (2026-11-24): 0.4 / max(range of half-year returns, range_floor) counted only when post-tax CAGR > target,
-    + 0.4 x 7 x [post-tax CAGR > target] (or a ramp from ramp_from to target if ramp_from is set), + 0.2 x 40 x post-tax CAGR.
-    Arrays (..., periods)."""
+    + 0.4 x 7 x [post-tax CAGR > target] (or a ramp from ramp_from to target if ramp_from is set), + 0.2 x 40 x post-tax CAGR,
+    - 2.8 x [range > range_cap]. Arrays (..., periods)."""
     v=np.asarray(v,float);k=np.asarray(keep,bool);cg=post_tax_cagr(v,labels,k,yrs,c['tax'])
     rng=(v[...,k].max(-1)-v[...,k].min(-1)) if k.any() else np.zeros(v.shape[:-1])
     hit=cg>c['target']
     ramp=hit*1. if c.get('ramp_from') is None else np.clip((cg-c['ramp_from'])/(c['target']-c['ramp_from']),0.,1.)
-    return .4/np.maximum(rng,c['range_floor'])*hit+.4*7*ramp+.2*40*cg
+    return .4/np.maximum(rng,c['range_floor'])*hit+.4*7*ramp+.2*40*cg-2.8*(rng>c.get('range_cap',np.inf))
 
 def fold(per,exclude=None):
     """(kept-label mask, years) of the train periods without the excluded year, as vec_stats counts them."""
@@ -497,7 +497,7 @@ def _signature(a,paths,scale,hol,gp):
                 max_trade_loss=a.max_trade_loss,min_weight=min(a.weights),robust=a.robust,comp=_comp(a))
 
 def _comp(a):
-    return dict(tax=a.tax,target=a.cagr_target,ramp_from=a.ramp_from,range_floor=a.range_floor) if a.objective=='composite' else None
+    return dict(tax=a.tax,target=a.cagr_target,ramp_from=a.ramp_from,range_floor=a.range_floor,range_cap=a.range_cap) if a.objective=='composite' else None
 
 def _stats_line(v,labels,lo,hi,kind,tax=.35):
     s=vec_stats(v,labels,lo,hi,kind);yrs=max((dt.date.fromisoformat(hi)-dt.date.fromisoformat(lo)).days,1)/365.25;v=np.asarray(v,float)
@@ -513,10 +513,11 @@ def main(argv=None):
     ap.add_argument('--capital',type=float,default=2.5e6,help='base of every return (default 25 lakh)')
     ap.add_argument('--scale',type=float,help="rupee multiplier (default 1 / the paths file's --target-fraction: full size)")
     ap.add_argument('--train-start',default='2021-09-01',help='first entry day of the search period');ap.add_argument('--split',default='2026-01-01',help='entries before this day are searched on (user: 2025 included; default %(default)s)')
-    ap.add_argument('--objective',choices=('composite','floor'),default='composite',help="composite (user): 0.4/max(half-year range, --range-floor) if post-tax CAGR > --cagr-target, + 2.8 if post-tax CAGR > --cagr-target, + 8 x post-tax CAGR; floor: worst period with --min-annual shortfall penalty (default %(default)s)")
+    ap.add_argument('--objective',choices=('composite','floor'),default='composite',help="composite (user): 0.4/max(half-year range, --range-floor) if post-tax CAGR > --cagr-target, + 2.8 if post-tax CAGR > --cagr-target, + 8 x post-tax CAGR, - 2.8 if the range > --range-cap; floor: worst period with --min-annual shortfall penalty (default %(default)s)")
     ap.add_argument('--tax',type=float,default=.35,help='tax on each year\'s net gain after loss set-off (default %(default)s)')
     ap.add_argument('--cagr-target',type=float,default=.20,help='post-tax CAGR target (default %(default)s)');ap.add_argument('--ramp-from',type=float,help='optional: replace the 0 / 1 target term by a ramp from this post-tax CAGR to --cagr-target (default: off, user: binary)')
     ap.add_argument('--range-floor',type=float,default=.05,help='smallest half-year range the spread term divides by (default %(default)s)')
+    ap.add_argument('--range-cap',type=float,default=.40,help='half-year range (best - worst) above which the objective loses 2.8 (default %(default)s)')
     ap.add_argument('--end',default='2026-07-01',help='entries before this day; trades still open are valued to it')
     ap.add_argument('--period',choices=('half','quarter'),default='half',help='period of the objective and the screening scores')
     ap.add_argument('--rank',choices=RANKS,default='composite',help='stage-1 screening score: composite = the --objective composite on the single strategy at full size (default); lcb = yearly return - one yearly sd; sharpe; worst = worst period')
@@ -618,7 +619,7 @@ def main(argv=None):
     fold=lambda y:dict(WORST={i:EX[i]['worst'][y] for i in union},EQ={i:EX[i]['eq'][y] for i in union},dmask=dm[y])
     # ---- stage 2
     tgt=f'2.8 x ramp({a.ramp_from:.0%}..{a.cagr_target:.0%})' if a.ramp_from is not None else f'2.8 if post-tax CAGR > {a.cagr_target:.0%}'
-    od=(f'0.4/max(range,{a.range_floor:g}) if post-tax CAGR > {a.cagr_target:.0%} + {tgt} + 8 x post-tax CAGR, tax {a.tax:.0%}' if per.composite else f'worst {a.period}, yearly return >= {a.min_annual:.0%} of capital')
+    od=(f'0.4/max(range,{a.range_floor:g}) if post-tax CAGR > {a.cagr_target:.0%} + {tgt} + 8 x post-tax CAGR - 2.8 if range > {a.range_cap:.0%}, tax {a.tax:.0%}' if per.composite else f'worst {a.period}, yearly return >= {a.min_annual:.0%} of capital')
     print(f'\nstage 2: account on all train years (objective: {od}; sizes {a.weights}; peak exposure <= {a.max_exposure:g}; '
           f'trade loss x size <= {a.max_trade_loss:.1%}; account drawdown <= {a.max_dd:.0%})',flush=True)
     nm=lambda c:key_name(strategy_key(rows[c]))
