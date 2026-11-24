@@ -63,7 +63,8 @@ class Stage1V4913(Fixture):
         for cf,side,t in db.execute('SELECT config,side,bar FROM signals ORDER BY bar'):signals[cf,side].append(t)
         db.close();zg._CTX.clear()
         zg._CTX.update(paths=str(p),bars=bars,signals=dict(signals),configs=sorted({c for c,_ in signals}),per=per,scale=1.,capital=2.5e6,rank='lcb',
-                       min_trades=1,cand_min_annual=-9.,per_config=K,compound=False,min_fill_rate=0.,gap_policy='busy',workers=1,mem=2e5)
+                       min_trades=1,cand_min_annual=-9.,per_config=K,compound=False,min_fill_rate=0.,gap_policy='busy',workers=1,mem=2e5,
+                       robust=False,max_trade_loss=9.,min_weight=1.)
         return bars,signals
     def test_stage1_keeps_each_configurations_best_rules_and_equals_the_engine(self):
         p=self.paths_db();per=ws.Periods('2024-01-01','2024-01-25','2024-03-01','quarter');K=2;bars,signals=self._ctx(p,per,K)
@@ -77,30 +78,72 @@ class Stage1V4913(Fixture):
                                    XB=o['xb'].reshape(len(pairs),b.Np),XD=np.minimum(o['xd'],per.ohi).reshape(len(pairs),b.Np),P=o['vh'][0].reshape(len(pairs),b.Np))
                 E=ws.Engine(sd,per,2.5e6);allv={}
                 for r in range(len(pairs)):
-                    vt,n,_,_=E.train([r]);vo=E.oos([r])[0];allv.setdefault(vt.tobytes()+vo.tobytes(),(r,vt,vo,n))
+                    vt,n,_,_,_,_=E.train([r]);vo=E.oos([r])[0];allv.setdefault(vt.tobytes()+vo.tobytes(),(r,vt,vo,n))
                 for row in [x for x in res['rows'] if x['config']==cf]:                    # every kept row is exact
-                    r=pairs.index((row['profit'],row['stop']));vt,n,_,_=E.train([r])
+                    r=pairs.index((row['profit'],row['stop']));vt,n,_,_,_,_=E.train([r])
                     self.assertEqual(list(vt),row['train']);self.assertEqual(list(E.oos([r])[0]),row['oos']);self.assertEqual(n,row['trades'])
+                    sel=dict(side='bull',structure='naked',offset=0.,config=cf,profit=row['profit'],stop=row['stop'])   # worst trade: an independent replay
+                    w=0.
+                    for x in D.trades(sel,per.lo,per.mid,value_to=per.hi):
+                        if not np.isfinite(x['unit']):continue
+                        m=x['marks'][np.isfinite(x['marks'])];w=min(w,min(float(m.min()) if len(m) else 0.,x['unit'],0.)*x['units']/2.5e6)
+                    self.assertAlmostEqual(row['worst_trade'],w,12)
                 y,keep,yrs=S_[0];sc=sorted((float(ws.score(vt[None],np.array([n]),keep,yrs,'lcb',1,-9.,ppy)[0]) for r,vt,vo,n in allv.values()),reverse=True)[:K]
                 kept=sorted((x['scores'][0] for x in res['rows'] if x['config']==cf),reverse=True)[:K]
                 self.assertEqual(kept,sc)                                                   # the true top K distinct streams
+
+
+class RiskV4913(unittest.TestCase):
+    def test_mark_to_market_equity_equals_a_day_by_day_replay(self):
+        rnd=np.random.default_rng(8);per=ws.Periods('2021-09-01','2025-01-01','2026-07-01','half')
+        o0=dt.date(2021,8,1).toordinal();per.days=np.array(sorted(set(o0+rnd.choice(1900,1100,replace=False))),np.int64)
+        for trial in range(25):
+            sd=random_strategy(rnd,R=4,n=40);E=ws.Engine(sd,per,2.5e6);Np=sd.P.shape[1];L=12
+            E.J=rnd.integers(0,L,(4,Np));E.u=np.asarray(sd.units);E.W=-rnd.random((4,Np))*.05
+            E.row_ord=np.array([np.sort(e+rnd.integers(0,8,L)) for e in E.eord]);E.mf=rnd.normal(0,200,(Np,L))
+            E.XD=np.maximum(E.XD,E.row_ord[np.arange(Np)[None,:],E.J])                  # an exit fills on or after its decision day
+            b=list(rnd.integers(0,4,int(rnd.integers(1,4))));K=len(b);worst,Q=E.risk(b)
+            _,_,_,_,oi,ov=E.run(b,per.olo,per.ohi,per.olo,per.olo,per.tstart[:1]);ref=np.zeros(len(per.days));wref=0.
+            for i in oi[ov]:
+                if E.eord[i]<per.omid:wref=min(wref,sum(E.W[r,i] for r in b)/K)
+                for r in b:
+                    j=E.J[r,i]
+                    for d_,day in enumerate(per.days):
+                        if day<E.row_ord[i,0]:continue
+                        if day>=E.XD[r,i]:ref[d_]+=E.PU[r,i]/K;continue
+                        rows=[q for q in range(j+1) if E.row_ord[i,q]<=day];ref[d_]+=E.mf[i,rows[-1]]*E.u[i]/K
+            self.assertAlmostEqual(worst,wref,12);np.testing.assert_allclose(Q,ref/2.5e6,rtol=1e-12,atol=1e-15)
+    def test_drawdown_and_neighbourhood_median(self):
+        self.assertEqual(ws.drawdown(np.array([.1,.3,.05,.2,-.1,.4])),.4)
+        self.assertEqual(float(ws.drawdown(np.array([-.2,-.1]))),.2)                     # the start counts as the first peak
+        cf=['N3_k0.25_m8_j0.25_tw2','N3_k0.5_m8_j0.25_tw2','N3_k0.25_m8_j0.5_tw2','N5_k0.25_m8_j0.25_tw2','zone_only_tw2','zone_only_tw3']
+        nb=ws.neighbours(cf);self.assertEqual(sorted(x for x in nb[0] if x>=0),[0,1,2,3]);self.assertEqual(sorted(x for x in nb[4] if x>=0),[4,5])
+        sc=np.array([[1.],[3.],[-np.inf],[2.],[5.],[-np.inf]]);r=ws.robust(sc,nb)
+        self.assertEqual(r[0,0],2.);self.assertEqual(r[4,0],5.);self.assertTrue(np.isneginf(r[2,0]))    # upper median of 1,3,-inf,2 = 2; of 5,-inf = 5; failing self -> -inf
 
 
 class AccountV4913(unittest.TestCase):
     def test_greedy_account_respects_exposure_and_reports_its_objective(self):
         rnd=np.random.default_rng(3);per=ws.Periods('2021-09-01','2025-01-01','2026-07-01','half');T=len(per.train);nb=400
         V={i:rnd.normal(.04,.06,T) for i in range(40)};OCC={i:(rnd.random(nb)<rnd.uniform(.1,.6)).astype(np.float32) for i in range(40)}
-        a=SimpleNamespace(weights=[.25,.5,1.],min_annual=.2,max_strategies=6,max_exposure=1.,rounds=2)
+        a=SimpleNamespace(weights=[.25,.5,1.],min_annual=.2,max_strategies=6,max_exposure=1.,rounds=2,max_trade_loss=9.,max_dd=9.)
         for excl in (None,'2023'):
             ch,obj,steps=ws.build_account(list(V),V,OCC,per,a,excl)
             self.assertTrue(ch);self.assertEqual(obj,ws.objective(ws.account_vec(ch,V),per,a.min_annual,excl))
             self.assertLessEqual(float(sum(w*OCC[c] for c,w in ch).max()),1.+1e-9)
+            EQ={i:np.cumsum(rnd.normal(.0004,.01,300)) for i in V};WS={i:-rnd.uniform(0,.08) for i in V};dmask=np.ones(300,bool)
+            a.max_trade_loss=9.;a.max_dd=9.;free,_,_=ws.build_account(list(V),V,OCC,per,a,excl,WORST=WS,EQ=EQ,dmask=dmask)
+            dd_free=float(ws.drawdown(sum(w*EQ[c] for c,w in free)));a.max_trade_loss=.03;a.max_dd=dd_free/2   # a limit that binds
+            chr_,_,_=ws.build_account(list(V),V,OCC,per,a,excl,WORST=WS,EQ=EQ,dmask=dmask)
+            self.assertTrue(all(w*WS[c]>=-.03-1e-12 for c,w in chr_))
+            if chr_:self.assertLessEqual(float(ws.drawdown(sum(w*EQ[c] for c,w in chr_))),a.max_dd+1e-12)
+            a.max_trade_loss=9.;a.max_dd=9.
             single=max(ws.objective(w*V[c],per,a.min_annual,excl) for c in V for w in a.weights if (w*OCC[c]).max()<=1)
             self.assertGreaterEqual(obj,single)
     def test_basket_search_beats_the_reference_and_respects_exposure(self):
         rnd=np.random.default_rng(4);per=ws.Periods('2021-09-01','2025-01-01','2026-07-01','half')
         sd=random_strategy(rnd,R=5,n=80);E=ws.Engine(sd,per,2.5e6)
-        a=SimpleNamespace(min_annual=.0,rounds=2,max_exposure=1.,nbars=21000,ntrain=21000)
+        a=SimpleNamespace(min_annual=.0,rounds=2,max_exposure=1.,nbars=21000,ntrain=21000,max_trade_loss=9.,max_dd=9.)
         bk,obj=ws.basket_search([(E,1.)],3,per,a)
         self.assertEqual(obj,ws.objective(E.train(bk[0])[0],per,0.))
         self.assertGreaterEqual(obj,ws.objective(E.train([0,0,0])[0],per,0.))
@@ -116,14 +159,15 @@ class CommandV4913(Fixture):
         p=self.paths_db();out=Path(tempfile.mkdtemp())/'ws';buf=io.StringIO()
         with contextlib.redirect_stdout(buf):
             ws.main(['--paths',str(p),'--train-start','2024-01-01','--split','2024-01-25','--end','2024-03-01','--period','quarter','--min-trades','1',
-                     '--cand-min-annual','-9','--min-annual','0.1','--workers','1','--out',str(out),'--baskets','2','--rounds','1','--no-compound'])
+                     '--cand-min-annual','-9','--min-annual','0.1','--workers','1','--out',str(out),'--baskets','2','--rounds','1','--no-compound',
+                     '--max-trade-loss','0.5','--max-dd','0.5'])
         txt=buf.getvalue();self.assertIn('differ from the exact engine for 0',txt)
         f=json.loads((out/'final.json').read_text());self.assertTrue(f['strategies'])
         for n in ('candidates.csv','account.csv','periods.csv','loyo.csv'):self.assertTrue((out/n).exists())
         buf=io.StringIO()
         with contextlib.redirect_stdout(buf):
             ws.main(['--paths',str(p),'--train-start','2024-01-01','--split','2024-01-25','--end','2024-03-01','--period','quarter','--min-trades','1',
-                     '--cand-min-annual','-9','--workers','1','--out',str(out),'--stage1-only','--no-compound'])
+                     '--cand-min-annual','-9','--workers','1','--out',str(out),'--stage1-only','--no-compound','--max-trade-loss','0.5','--max-dd','0.5'])
         self.assertIn('2 groups already done, 0 to scan',buf.getvalue())
 
 
