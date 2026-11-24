@@ -6,7 +6,7 @@ A pair = one bull + one bear strategy, both at full size; their half-year return
 in time, so both can use the whole capital). A pair qualifies when
   - each leg's worst open trade loss  <= --max-trade-loss       (default 0.099 of capital)
   - each leg's train account drawdown <= --max-dd               (default 0.20; the pair's own drawdown needs the paths file)
-  - each leg has >= --min-trades train trades                   (default 20)
+  - each leg has >= --min-trades train trades                   (default 15)
   - pair post-tax CAGR (35% tax, loss carry-forward) >= --cagr-floor (default 0.20)
   - share of train half-years > 0 >= --min-positive             (default 0.85, i.e. 8 of 9)
   - half-year range (max - min) <= --range-cap                  (default 0.40)
@@ -121,7 +121,7 @@ def main(argv=None):
     ap.add_argument('--candidates',required=True);ap.add_argument('--out',required=True)
     ap.add_argument('--structures',default=OPTIONS,help='structures allowed in either leg (default: the option structures)')
     ap.add_argument('--max-trade-loss',type=float,default=.099);ap.add_argument('--max-dd',type=float,default=.20)
-    ap.add_argument('--min-trades',type=int,default=20);ap.add_argument('--cagr-floor',type=float,default=.20)
+    ap.add_argument('--min-trades',type=int,default=15);ap.add_argument('--cagr-floor',type=float,default=.20)
     ap.add_argument('--min-positive',type=float,default=.85);ap.add_argument('--range-cap',type=float,default=.40)
     ap.add_argument('--range-floor',type=float,default=.05);ap.add_argument('--tax',type=float,default=.35)
     ap.add_argument('--rank',choices=('objective','cagr','worst-half'),default='objective')

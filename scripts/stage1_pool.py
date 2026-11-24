@@ -30,7 +30,7 @@ def main(argv=None):
     ap.add_argument('--holidays');ap.add_argument('--gap-policy',default='busy');ap.add_argument('--capital',type=float,default=2.5e6)
     ap.add_argument('--train-start',default=None,help='default: from the run, else 2021-09-01');ap.add_argument('--split',default=None,help='default: from the run, else 2026-01-01')
     ap.add_argument('--end',default=None,help='default: from the run, else 2026-07-01')
-    ap.add_argument('--structures',default=OPTIONS);ap.add_argument('--min-trades',type=int,default=20)
+    ap.add_argument('--structures',default=OPTIONS);ap.add_argument('--min-trades',type=int,default=15)
     ap.add_argument('--max-trade-loss',type=float,default=.099);ap.add_argument('--top',type=int,default=1000,help='best per side (0 = all)')
     ap.add_argument('--out',required=True)
     a=ap.parse_args(argv);t0=time.time();sts=set(a.structures.split(','));out=os.path.abspath(a.out);os.makedirs(out,exist_ok=True)
