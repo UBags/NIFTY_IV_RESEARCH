@@ -53,7 +53,7 @@ LOGDIR=runs/logs
 LOCK=runs/.v4_pipeline.lock
 PIDF=runs/.v4_pipeline.pid
 MARK=$OUT/.pipeline
-OTHER_JOBS='(^|/)(nifty-diag-wide-search|nifty-zone-contracts|nifty-zone-paths|stage1_pool\.py|strategy_periods\.py|pair_picker\.py|merge_paths\.py|v4_pipeline\.sh)$'
+OTHER_JOBS='(^|/)(nifty-diag-wide-search|nifty-zone-contracts|nifty-zone-paths|stage1_pool[.]py|strategy_periods[.]py|pair_picker[.]py|merge_paths[.]py|v4_pipeline[.]sh)$'
 
 SELF="$(readlink -f "${BASH_SOURCE[0]}")"
 PULL=1 FG=0 FOLLOW=0 WORKERS=4 FROM=1 FORCE=0 FRESH=0 REBUILD_PATHS=0 REBUILD_ALL=0 CLEAN=0 WORKER=0 STATUS=0 STOP=0
@@ -85,8 +85,8 @@ if [ -z "${VIRTUAL_ENV:-}" ]; then
   set +u; . .venv/bin/activate; set -u
 fi
 
-others(){                             # processes whose program or script (first 3 words) is a pipeline tool
-  ps -eo pid=,args= | awk -v re="$OTHER_JOBS" -v me=$$ '$1!=me{for(i=2;i<=4&&i<=NF;i++)if($i~re){print;next}}' || true
+others(){                             # processes that are a pipeline tool: the program itself, or python / bash running the script
+  ps -eo pid=,args= | awk -v re="$OTHER_JOBS" -v me=$$ '$1!=me && ($2~re || ($2~/(^|[/])(python[0-9.]*|bash|sh)$/ && $3~re))' || true
 }
 
 if [ $STOP = 1 ]; then
