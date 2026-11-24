@@ -67,11 +67,36 @@ def plan_targets(bars,final,sig,listing,a):
                 if d<=e:out.add((d,e,k,cp))
     return out,sim.counts
 
+def plan_combo_targets(bars,final,sig,listing,a,structures):
+    """V4.9.14: (day, expiry, strike, cp) the multi-leg structures can need: for every signal, structure and level, the option legs
+    (strategy_spec.combo_legs at the signal bar's close; futures legs need no option data) from the signal day until the zone changes
+    (+ --buffer-sessions) or the legs expire. A superset of what nifty-zone-paths can touch (entries that never fill are included)."""
+    from nifty_iv.core import strategy_spec as ss
+    levels=getattr(a,'offset_mode','points')=='levels';offs=ss.COMBO_LEVELS if levels else zb.parse_offsets(a.offsets,'points')
+    sessions=sorted({b.day for b in bars});pos={d:i for i,d in enumerate(sessions)};out=set();counts=collections.Counter()
+    for t,sides in sorted(zb.entry_map(bars,sig,a.from_date,a.to_date).items()):
+        b=bars[t];fill=b.day if b.end<zs.CLOSE else (bars[t+1].day if t+1<len(bars) else None)
+        if fill is None:continue
+        for side in sides:
+            colour='G' if side=='bull' else 'R';end=next((k for k in range(t+1,len(bars)) if final[k]!=colour),len(bars)-1)
+            last=sessions[min(pos[bars[end].day]+1+a.buffer_sessions,len(sessions)-1)]
+            for st in structures:
+                if side not in ss.COMBOS[st]['sides']:continue
+                e,why=ss.select_short_expiry(st,fill,listing.get(b.day,()),a.min_short_days)
+                if e is None:counts[f'{st}_{why}']+=1;continue
+                for lv in offs:
+                    for cp,k,_ in ss.combo_legs(st,side,b.close,lv,points=not levels):
+                        if cp=='FUT':continue
+                        for d in sessions[pos[b.day]:pos[last]+1]:
+                            if d<=e:out.add((d,e,k,cp))
+                    counts[f'{st}_planned']+=1
+    return out,counts
+
 def main():
     ap=cli.Parser(description=__doc__);zb.add_common(ap)
     ap.add_argument('--out',default='zone_options.sqlite');ap.add_argument('--buffer-sessions',type=int,default=3)
     ap.add_argument('--strike-pad',type=int,default=0,help='Also extract calendar strikes within this many points (multiples of 100) of the planned ones')
-    ap.add_argument('--structures',default='naked,calendar',help='option structures to plan for: naked, naked_m1 (current-month monthly >= 21 days), naked_m2 (next-month monthly), calendar (V4.9.6)')
+    ap.add_argument('--structures',default='naked,calendar',help='option structures to plan for: naked, naked_m1 (current-month monthly >= 21 days), naked_m2 (next-month monthly), calendar (V4.9.6); V4.9.14 multi-leg: vert_w1, vert_w2, married, covered, collar_w1, collar_w2, longopt, backspread_w1, backspread_w2 (use a new --out)')
     a=ap.parse_args();a.structures_list=[x for x in a.structures.split(',') if x];db=sqlite3.connect(a.out);db.executescript(DDL)
     done={r[0] for r in db.execute('SELECT step FROM progress')}
     with connect() as pg:
@@ -93,7 +118,12 @@ def main():
             minutes=zs.load_minutes(a.spot)
             if not minutes:sys.exit(f'No spot minutes in {a.spot}: run nifty-zone-spot first')
             bars,final,_=zs.zones(minutes);sig=zs.signal_grid(bars,final)
-            targets,counts=plan_targets(bars,final,sig,listing,a)
+            from nifty_iv.core import strategy_spec as ss
+            combos=[x for x in a.structures_list if ss.is_combo(x)];legacy=[x for x in a.structures_list if not ss.is_combo(x)]
+            targets=set();counts=collections.Counter()
+            if legacy:
+                a.structures_list=legacy;t1,c1=plan_targets(bars,final,sig,listing,a);targets|=t1;counts.update(c1);a.structures_list=legacy+combos
+            if combos:t2,c2=plan_combo_targets(bars,final,sig,listing,a,combos);targets|=t2;counts.update(c2)
             db.executemany('INSERT OR IGNORE INTO targets VALUES(?,?,?,?)',sorted(targets))
             db.execute('INSERT INTO meta VALUES(?,?)',('plan',json.dumps(plan)));db.execute('INSERT INTO meta VALUES(?,?)',('plan_counts',json.dumps(dict(counts))));db.commit()
             print(f'plan: {len(targets)} contract-days; {dict(counts)}',flush=True)

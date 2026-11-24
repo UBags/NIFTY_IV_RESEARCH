@@ -1,3 +1,14 @@
+# V4.9.14 (2026-11-24)
+
+| Item | Change |
+|---|---|
+| Multi-leg structures (user) | `strategy_spec.COMBOS`, path engine and rules: `vert_w1`, `vert_w2` (bull put / bear call credit spread, long leg 1-2 levels further OTM, weekly expiry as naked); `married` (married put / protective call: future + long protective option), `covered` (covered call / covered put: future + short option on the profit side), `collar_w1`, `collar_w2` (future + protective option + short option 0-1 levels further OTM on the profit side), `longopt` (futures replacement: long call / long put), `backspread_w1`, `backspread_w2` (call ratio backspread: short 1, long 2 calls 1-2 levels further OTM; bull only, as listed). Futures combos and long options: current monthly expiry >= 21 days (user), end at expiry or zone change. Levels 0-3 OTM for the sold / hedge leg (user). All legs fill together minute by minute (ratio legs in proportion), full size or nothing |
+| Margin and size (user) | Entry lots = floor(naked lots x factor): 2-leg capped loss 1.6x (margin 60% of naked), 3-4 legs 0.9x (110%), covered and long options 1.0x (100%); `mloss` uses the structure's margin share |
+| Rules per structure | Credit spreads: the naked premium rules (tp, loss, mult) on the net credit; long options: the calendar ones (tp, dloss) on the debit; futures combos and backspreads: spot-, time-, trailing- and margin-based rules only (base = the position's margin); `exp` for every expiring structure. Existing structures' rule sets unchanged |
+| Futures carry (user) | `nifty-zone-paths --carry` (default 0.055): futures and futures legs priced at spot x (1 + carry x days to expiry / 365), settling at the spot reference; `futures_zone` (no expiry): 30 days of carry at entry, paid down while held. 0 = the earlier spot proxy (bit-identical: checked) |
+| Data | The extraction is targeted: covered, collar, long-option and backspread legs (the other option type on that side's days) were never extracted. `nifty-zone-contracts --structures <combos>` plans them (`plan_combo_targets`; use a new --out). `scripts/combo_build_cmds.py` prints extraction, paths and merge commands with the existing paths file's settings; `scripts/merge_paths.py` merges (checks bars, signals, sizing) |
+| Checks | `tests/test_combos_v4914.py` (12): legs and strikes both sides, margin factors, expiry policies, rule families, virtual future = spot x carry, expiry settlement of married put, covered put, vertical (loss capped at the width) and 1x2 backspread against hand payoffs (ratio mutation caught), carry on futures_expiry / futures_zone, planner, merge. Existing structures (carry 0): synthetic paths identical to V4.9.13. Grid, strategy scan and wide search run on the new structures (wide-search pool vs exact engine: 0 differences) |
+
 # V4.9.13 (2026-11-24)
 
 Speed only: every result is bit-identical to V4.9.12 (no tolerance). Reviewed against proposals from Gemini and ChatGPT;

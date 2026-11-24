@@ -135,14 +135,15 @@ class PathSim:
         self.day_end={}
         for i,b in enumerate(bars):self.day_end[b.day]=i            # last bar index of each session
         self.session_days=sorted(self.day_end)
-    def lots_for(self,lot,day=None):
+    def lots_for(self,lot,day=None,structure=None):
         """Target exchange lots of an entry. --target-margin: ceil(--target-fraction x the whole lots whose upper-end margin
         (strategy_spec margin table) fits that budget on the fill day) (V4.9.7; fraction 1 = the V4.9.6 full account);
         --target-units: round(target / lot); else --lots."""
         tm=getattr(self.cfg,'target_margin',None)
-        if tm and day:return ss.entry_lots(day,lot,tm,getattr(self.cfg,'target_fraction',1.))
-        tu=getattr(self.cfg,'target_units',None)
-        return max(1,int(round(tu/lot))) if tu else self.cfg.lots
+        if tm and day:n=ss.entry_lots(day,lot,tm,getattr(self.cfg,'target_fraction',1.))
+        else:tu=getattr(self.cfg,'target_units',None);n=max(1,int(round(tu/lot))) if tu else self.cfg.lots
+        f=ss.lots_factor(structure) if structure else 1.
+        return n if f==1. else max(1,int(math.floor(n*f+1e-9)))                        # V4.9.14: multi-leg margin (user factors)
     def arrays(self,day):
         d=self.days.get(day)
         if d is None:
@@ -165,18 +166,32 @@ class PathSim:
         if b.end<zs.CLOSE:return b.day,b.end-zs.OPEN,min(b.end+45,zs.CLOSE)-zs.OPEN
         return (self.bars[k+1].day,0,45) if k+1<len(self.bars) else None
     def key(self,c):return (c[0],float(c[1]),c[2])
+    def dk(self,day,c):
+        """(DayArrays, key) of contract c on day; a future (c[2] == 'FUT', V4.9.14) gets its minute arrays built on first use."""
+        d=self.arrays(day);k=self.key(c)
+        if type(k) is tuple and len(k)>2 and k[2]=='FUT' and k not in d.buy:self.fut_arrays(d,day,k)
+        return d,k
+    def fut_price(self,spot,day,expiry):
+        """Monthly future from spot: spot x (1 + --carry x calendar days to expiry / 365) (no futures data in the extraction; V4.9.14)."""
+        return spot*(1+getattr(self.cfg,'carry',0.)*max(0,zb.days_between(day,expiry))/365)
+    def fut_arrays(self,d,day,k):
+        """A future's minute arrays: price = fut_price of the spot minute (its open), unlimited volume where spot printed, zeros elsewhere."""
+        a=self.spot.get(day);a=np.full(NMIN,np.nan) if a is None else a;ok=np.isfinite(a)
+        px=np.where(ok,self.fut_price(np.where(ok,a,0.),day,k[0]),0.);vol=np.where(ok,1e12,0.)
+        d.buy[k]=px;d.sell[k]=px;d.close[k]=px;d.vol[k]=vol;d.high[k]=px;d.low[k]=px
+        if d.px is not d.buy:d.px[k]=px
     def mark(self,day,minute,c):
         """(close, volume) at a minute, zeros if absent."""
-        d=self.arrays(day);k=self.key(c);i=zs.minute_of(minute)-zs.OPEN
+        d,k=self.dk(day,c);i=zs.minute_of(minute)-zs.OPEN
         cl=d.close.get(k)
         return (cl[i],d.vol[k][i]) if cl is not None else (0.,0.)
     def extracted(self,day,c):
         """Whether the contract has any minute that day in the extraction (False: a data gap, not illiquidity)."""
-        return self.key(c) in self.arrays(day).px
+        d,k=self.dk(day,c);return k in d.px
     def slice(self,day,i0,i1,c,want,lot,buy=True):
         """Trade up to `want` units of c over minutes [i0,i1): each minute at most --max-participation of its volume, whole lots,
         at the buy or sell price of the fill-price model. Returns (units, notional, volume used, index of the last minute used or None)."""
-        d=self.arrays(day);k=self.key(c);px=(d.buy if buy else d.sell).get(k)
+        d,k=self.dk(day,c);px=(d.buy if buy else d.sell).get(k)
         if px is None or i0>=i1 or want<=0:return 0,0.,0.,None
         vol=d.vol[k][i0:i1];cap=self.capacity(d,k,lot)[i0:i1];cs=np.cumsum(cap)
         total=int(cs[-1])
@@ -189,12 +204,15 @@ class PathSim:
     def book(self,acc,c,trade_sign,lot):
         notional,qty,vol,day=acc
         if not qty:return 0.
+        if c[2]=='FUT':u=trade_sign*qty;px=notional/qty;return -u*px-self.fut_cost(u,px,day)     # futures charges and --slippage-points
         cash,_,_,_=fill_detail(notional/qty,trade_sign*qty,day,self.cfg,c[0],vol/lot,None,None,lot)
         return cash
     def settle_px(self,c):
         ref=self.m.settlement(c[0])
         if ref is None:return None
-        s=ref[0];return max(0.,s-c[1]) if c[2]=='CE' else max(0.,c[1]-s)
+        s=ref[0]
+        if c[2]=='FUT':return s                                                        # a future settles at the spot reference
+        return max(0.,s-c[1]) if c[2]=='CE' else max(0.,c[1]-s)
     def last_close(self,c,k,t):
         """Latest bar-close price of c at or before bar t, known from bar k's state plus bars k+1..t."""
         for j in range(t,k,-1):
@@ -205,7 +223,7 @@ class PathSim:
     def caps(self,day,i0,i1,c,lot,buy):
         """Per-minute tradable units of c over [i0,i1) (at most --max-participation of each minute's volume, whole lots), the fill
         price array and the volume array; None if c has no price that day."""
-        d=self.arrays(day);k=self.key(c);px=(d.buy if buy else d.sell).get(k)
+        d,k=self.dk(day,c);px=(d.buy if buy else d.sell).get(k)
         if px is None or i0>=i1:return None
         vol=d.vol[k][i0:i1];return self.capacity(d,k,lot)[i0:i1].copy(),px[i0:i1],vol
     def enter(self,k,legs,lot,start=None,need=None,bars=1,colour=None,minutes=None):
@@ -219,7 +237,9 @@ class PathSim:
         close and running on into the next windows (the next session's opening minutes after the day's last bar), are used.
         Returns dict(status='ok'|'none', ...): ok carries bar (bar whose window completed it), day (first fill day), last_day; none
         carries reason, limit='long'|'short' (the thinner leg) and until (the last bar whose window was tried)."""
-        want=abs(legs[0][1]);need=want if need is None else need;got=0;pieces=[];tot=collections.Counter();last=k;budget=minutes or None
+        base=min(abs(u) for _,u in legs);rat=[abs(u)//base for _,u in legs]            # V4.9.14: ratio legs (a backspread's 1 x 2); 1 = as before
+        if any(abs(u)!=r*base for (_,u),r in zip(legs,rat)):raise ValueError('leg sizes must be whole multiples of the smallest')
+        want=base;need=want if need is None else need;got=0;pieces=[];tot=collections.Counter();last=k;budget=minutes or None
         for j in range(bars):
             kk=k+j
             if j and kk>=len(self.bars):break
@@ -239,7 +259,7 @@ class PathSim:
             cs=[self.caps(day,i0,i1,c,lot,u>0) for c,u in legs]
             if any(x is None for x in cs):continue           # a leg without a price that day: nothing tradable in this window
             for (c,_),x in zip(legs,cs):tot[c]+=float(x[0].sum())
-            cap=np.min(np.vstack([x[0] for x in cs]),axis=0);cum=np.cumsum(cap);avail=int(cum[-1]) if len(cum) else 0
+            cap=np.min(np.vstack([x[0] if r==1 else np.floor(x[0]/(r*lot))*lot for x,r in zip(cs,rat)]),axis=0);cum=np.cumsum(cap);avail=int(cum[-1]) if len(cum) else 0
             if not avail:continue
             left=want-got
             if avail<left:taken=cap;m=int(np.flatnonzero(cap)[-1])
@@ -253,10 +273,11 @@ class PathSim:
         cash=0.;px={};filled=[];notional=collections.Counter()
         for kk,day,i0,m,taken,cs in pieces:                  # each window booked on its own day, with that day's costs
             n=int(taken.sum())
-            for (c,u),(_,p,vol) in zip(legs,cs):
-                nt=float(taken@p[:len(taken)]);used=float(vol[:len(taken)][taken>0].sum());notional[c]+=nt
-                cash+=self.book([nt,n,used,day],c,1 if u>0 else -1,lot)
-        for c,u in legs:px[c]=notional[c]/got;filled.append((c,got if u>0 else -got))
+            for (c,u),(_,p,vol),r in zip(legs,cs,rat):
+                tk=taken if r==1 else r*taken
+                nt=float(tk@p[:len(tk)]);used=float(vol[:len(tk)][tk>0].sum());notional[c]+=nt
+                cash+=self.book([nt,n*r,used,day],c,1 if u>0 else -1,lot)
+        for (c,u),r in zip(legs,rat):px[c]=notional[c]/(got*r);filled.append((c,got*r if u>0 else -got*r))
         kk,day,i0,m,_,_=pieces[-1]
         return dict(cash=cash,px=px,day=pieces[0][1],last_day=day,bar=kk,ix=self.index_at(day,i0,i0+m+1),filled=tuple(filled),units=got,status='ok',windows=len(pieces))
     def index_at(self,day,i0,i1):
@@ -348,9 +369,45 @@ class PathSim:
         pad=SLOTS-len(D)
         return (tuple(D)+(10**9,)*pad,tuple(Cs)+(math.nan,)*pad,tuple(Vs)+(math.nan,)*pad,n,fill_days)
     # ---------- option pairs ----------
+    def open_combo(self,k,side,structure,offset,start=None,size=None):
+        """V4.9.14: open a multi-leg structure (strategy_spec.COMBOS) at the bar after k: options and / or the monthly future, all
+        legs filled together minute by minute (ratio legs in proportion), full size or nothing. Ends at expiry or zone change."""
+        b=self.bars[k];levels=getattr(self.cfg,'offset_mode','points')=='levels';w=self.window(k)
+        if w is None:return None,'no_next_bar'
+        day=w[0];exps=self.m.expiries(b.day,b.mark_minute)
+        short,why=ss.select_short_expiry(structure,day,exps,self.cfg.min_short_days)
+        if short is None:return None,why
+        lot=self.lots.get(day,short).qty
+        if not lot:return None,'lot_unknown'
+        if size and size%lot:return None,'lot_changed'
+        units=size or lot*self.lots_for(lot,day,structure)
+        spec=ss.combo_legs(structure,side,b.close,offset,points=not levels)
+        legs=[((short,0.,'FUT') if cp=='FUT' else (short,strike,cp),sg*units) for cp,strike,sg in spec]
+        opt=[(c,u) for c,u in legs if c[2]!='FUT'];c0=opt[0][0] if opt else legs[0][0]
+        g=dict(day=day,signal_bar=k,side=side,structure=structure,offset=offset,cp=c0[2],strike=c0[1],atm=ss.atm(b.close) if levels else round(b.close/100)*100,roll=int(size is not None))
+        missing=[c for c,_ in legs if not self.extracted(day,c)]
+        if missing:
+            for c in missing:self.gap(g,'not_extracted','long' if dict(legs)[c]>0 else 'short',c[0],zb.days_between(day,c[0]))
+            return None,'not_extracted'
+        first=size is None
+        r=self.enter(k,legs,lot,start,need=size,bars=self.cfg.entry_bars if first else 1,colour=('G' if side=='bull' else 'R') if first else None,
+                     minutes=getattr(self.cfg,'entry_minutes',None) if first else None)
+        if r['status']=='none':
+            self.attempt_end=r.get('until',k)
+            if r.get('limit'):self.counts['no_liquid_entry_limited_by_'+r['limit']]+=1
+            return None,r.get('reason','no_liquid_entry')
+        if r.get('windows',1)>1:self.counts[f"entry_completed_in_window_{r['bar']-k+1}"]+=1
+        for c,q in r['px'].items():self.lc[c]=q
+        cash=r['cash'];cls=ss.structure_class(structure)
+        # premium base: the net credit (credit spreads) or debit (long options); other combos: the position's margin (user shares)
+        base=cash if cls=='credit' else -cash if cls=='debit' else r['units']*ss.margin_per_unit(r['day'])*ss.margin_share(structure)
+        sp=sum(-np.sign(u)*r['px'][c] for c,u in opt) if cls=='credit' else (r['px'][c0] if opt else math.nan)   # credit spreads: net premium per unit
+        return dict(held=r['filled'],px=r['px'],lot=lot,units=r['units'],short=short,long=None,day=r['day'],cash=cash,base=base,strike=c0[1],entry_index=r['ix'],
+                    partial=False,short_px=float(sp),bar=r['bar']),None
     def open_pair(self,k,side,structure,offset,start=None,size=None):
         """Open a short (naked) or short+long (calendar) at the bar after k. size: the path's units on a roll reopen (all of it or
         nothing, so a path's size never changes); None on a first entry (target --lots lots, at least one lot)."""
+        if ss.is_combo(structure):return self.open_combo(k,side,structure,offset,start,size)
         b=self.bars[k];cp='PE' if side=='bull' else 'CE';levels=getattr(self.cfg,'offset_mode','points')=='levels'
         strike=ss.strike_for(side,b.close,offset) if levels else float(round(b.close/100)*100+offset);w=self.window(k)
         if w is None:return None,'no_next_bar'
@@ -427,7 +484,7 @@ class PathSim:
             stale+=u*self.lc.get(c,p.entry_px[c])
         end=None
         if self.final[k]!=p.colour:end='zone_flip'
-        elif ss.is_naked(p.structure) and (b.day>p.short or (b.day==p.short and b.end==zs.CLOSE)):end='expiry'
+        elif (ss.is_naked(p.structure) or ss.is_combo(p.structure)) and (b.day>p.short or (b.day==p.short and b.end==zs.CLOSE)):end='expiry'
         roll=p.structure=='calendar' and end is None and ((b.day>=p.short and (b.end>=zb.ROLL_BAR_END or b.day>p.short)) or zb.days_between(b.day,p.long)<=30)
         x_cash,x_bar,x_day,x_forced,ok,sched,rems,last_fill,slots=self.exit(p.held,k,p.lot)
         mark=p.cash_total+stale
@@ -483,14 +540,19 @@ class PathSim:
         if not lot:   # lot size not determinable (e.g. the mid-2021 transition): rejected, as nifty-zone-legacy-futures does
             self.counts['reject_futures_lot_unknown']+=1
             return self.done.append(dict(side=side,structure=horizon,offset=0.,signal_bar=t,status='no_fill',reason='lot_unknown'))
+        entry_day=day
+        def F(spot,d):                                                                   # V4.9.14 --carry: futures_expiry converges to spot at its
+            if horizon=='futures_expiry':return self.fut_price(spot,d,expiry)              # expiry; futures_zone (rolled, no expiry): 30 days of carry at
+            return spot*(1+getattr(self.cfg,'carry',0.)*(30-zb.days_between(entry_day,d))/365)   # entry, paid down day by day while held
+        px=F(px,day)
         units=lot*self.lots_for(lot,day)*(1 if side=='bull' else -1);cash=-units*px-self.fut_cost(units,px,day);colour='G' if side=='bull' else 'R'
         rows=collections.defaultdict(list);head=dict(entry_day=day,lot=lot,units=abs(units),short_expiry=expiry,long_expiry=None,strike=px,entry_index=px)
         for k in range(t+1,len(self.bars)):
-            b=self.bars[k];value=units*b.close;end=None
+            b=self.bars[k];value=units*F(b.close,b.day);end=None
             if self.final[k]!=colour:end='zone_flip'
             elif horizon=='futures_expiry' and (b.day>expiry or (b.day==expiry and b.end>=zb.ROLL_BAR_END)):end='expiry'
             f=self.fut_exit(k)
-            if f:xd,xp,xb=f;x_cash=units*xp-self.fut_cost(-units,xp,xd)
+            if f:xd,xp,xb=f;xp=F(xp,xd);x_cash=units*xp-self.fut_cost(-units,xp,xd)
             else:xd,x_cash,xb=self.bars[-1].day,math.nan,len(self.bars)-1          # no print before the data ends: no exit value
             for name,v in zip(FLOATS,(cash,cash,math.nan,value,cash+value,x_cash)+(math.nan,)*(2*SLOTS)):rows[name].append(v)
             for name,v in zip(INTS,(xb,ordinal(xd),0,0,0)+(10**9,)*SLOTS+(0,0)):rows[name].append(v)   # one fill: no partial state to store
@@ -509,6 +571,11 @@ class PathSim:
             for side in entries.get(k,()):
                 for s in structures:
                     if s in FUTURES_STRUCTURES:self.futures_path(k,side,s);continue
+                    if ss.is_combo(s):
+                        if side not in ss.COMBOS[s]['sides']:continue
+                        offs=[o for o in offsets if o in ss.COMBO_LEVELS] if getattr(self.cfg,'offset_mode','points')=='levels' else offsets
+                        for off in offs:self.start(k,side,s,off)
+                        continue
                     for off in offsets:self.start(k,side,s,off)
             for key in [x for x in self.memo if x[1]<k]:del self.memo[key]
             if sink and self.done:n+=len(self.done);sink(self.done);self.done=[]
@@ -544,12 +611,14 @@ def config(a):
         max_exit_lag_bars=a.max_exit_lag_bars,forced_exit_haircut=a.forced_exit_haircut,hedge_bps=0.,hedge_statutory=True,slippage_points=a.slippage_points,
         roll_entry_after_exit=getattr(a,'roll_entry_after_exit',True),fill_price=getattr(a,'fill_price','ohlc4'),target_units=getattr(a,'target_units',None),
         target_margin=getattr(a,'target_margin',None),offset_mode=getattr(a,'offset_mode','points'),
-        target_fraction=getattr(a,'target_fraction',1.),entry_bars=getattr(a,'entry_bars',1),entry_minutes=getattr(a,'entry_minutes',None))
+        target_fraction=getattr(a,'target_fraction',1.),entry_bars=getattr(a,'entry_bars',1),entry_minutes=getattr(a,'entry_minutes',None),
+        carry=getattr(a,'carry',0.))
 
 def main():
     ap=cli.Parser(description=__doc__);zb.add_common(ap)
     ap.add_argument('--options',required=True,help='zone_options.sqlite from nifty-zone-contracts');ap.add_argument('--out',default='zone_paths.sqlite')
-    ap.add_argument('--structures',default='naked,calendar,futures_zone,futures_expiry',help='also naked_m1 (current-month monthly >= 21 days) and naked_m2 (next-month monthly), if planned in the extraction')
+    ap.add_argument('--structures',default='naked,calendar,futures_zone,futures_expiry',help='also naked_m1 (current-month monthly >= 21 days) and naked_m2 (next-month monthly), if planned in the extraction; V4.9.14 multi-leg: '+', '.join(ss.COMBO_STRUCTURES)+' (levels 0-3 OTM; need a combo extraction)')
+    ap.add_argument('--carry',type=float,default=.055,help='yearly futures carry over spot (futures and futures legs: spot x (1 + carry x days to expiry / 365); futures_zone: 30 days at entry, paid down while held; V4.9.14 default %(default)s, 0 = the earlier spot proxy)')
     ap.add_argument('--slippage',type=float,default=.5);ap.add_argument('--brokerage',type=float,default=20.);ap.add_argument('--max-participation',type=float,default=.20,help='share of each minute\'s traded volume an order may take (V4.9.7 default 0.20)')
     ap.add_argument('--max-exit-lag-bars',type=int,default=9);ap.add_argument('--forced-exit-haircut',type=float,default=.02)
     ap.add_argument('--slippage-points',type=float,default=1.,help='Futures: index points of slippage per unit per side')

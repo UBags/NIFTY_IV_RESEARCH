@@ -52,7 +52,8 @@ MARGIN_LOSS_PCTS=(1,1.5,2,2.5,3,3.75,5,6.25,7.5,10)   # mloss X = loss >= X% of 
 def g(x):return f'{x:g}'
 
 def stop_rules(structure):
-    naked=ss.is_naked(structure);cal=structure=='calendar'
+    cls=ss.structure_class(structure);naked=cls in ('naked','credit');cal=cls in ('calendar','debit')   # V4.9.14: credit spreads use the naked
+    # premium rules (on the net credit), long options the calendar ones (on the debit); futures combos: spot-, time- and margin-based only
     r=['none']
     r+=[f'atr{p}x{g(m)}' for p in ATR_PERIODS for m in ATR_MULTS]+[f'eatr{p}x{g(m)}' for p in ATR_PERIODS for m in ATR_MULTS]
     r+=[f'pct{g(x)}' for x in PCTS]+[f'epct{g(x)}' for x in PCTS]+[f'pts{x}' for x in POINTS]
@@ -61,7 +62,7 @@ def stop_rules(structure):
     r+=[f'chand{L}x{g(m)}' for L in LOOKBACKS for m in (1,1.5,2,2.5,3,4)]+[f'donch{L}c{g(c)}' for L in LOOKBACKS for c in (0,.25,.5,1)]
     r+=[f'be{g(a)}c{g(c)}' for a in (.5,1,1.5,2,3) for c in (0,.1,.25)]+[f'gb{g(a)}x{g(q)}' for a in (.5,1,1.5,2,3) for q in (.25,.33,.5,.67,.75)]
     r+=[f'time{n}' for n in (1,2,3,5,7,10,15,20,30)]
-    if naked or structure=='futures_expiry':r+=[f'exp{t}' for t in (3,2,1)]
+    if ss.expires(structure):r+=[f'exp{t}' for t in (3,2,1)]
     r+=[f'ema{L}p{q}' for L in EMAS for q in (1,2,3)]+[f'vr{g(x)}' for x in (1.25,1.5,1.75,2,2.5)]+[f'tr{g(x)}' for x in (1.5,2,3)]
     r+=['tod1400','tod1445','tod1515','wkend']+[f'stag{n}a{g(a)}' for n in (1,2,3,5,7) for a in (.25,.5,1)]
     if naked:r+=[f'loss{x}' for x in (25,35,50,75,100,125,150,200,250,300)]+[f'mult{g(x)}' for x in (1.2,1.35,1.5,1.75,2,2.5,3,4)]
@@ -70,23 +71,23 @@ def stop_rules(structure):
     return r
 
 def profit_rules(structure):
-    r=['none']
-    if ss.is_naked(structure):r+=[f'tp{x}' for x in (5,10,15,20,25,30,35,40,45,50,60,70,75,80,90,95)]
-    if structure=='calendar':r+=[f'tp{x}' for x in (5,10,15,20,25,35,50,75,100)]
+    r=['none'];cls=ss.structure_class(structure)
+    if cls in ('naked','credit'):r+=[f'tp{x}' for x in (5,10,15,20,25,30,35,40,45,50,60,70,75,80,90,95)]
+    if cls in ('calendar','debit'):r+=[f'tp{x}' for x in (5,10,15,20,25,35,50,75,100)]
     return r+[f'target{p}x{g(m)}' for p in (15,30,45) for m in (.5,1,1.5,2,2.5,3,4,5)]+[f'tpct{g(x)}' for x in (.5,1,1.5,2,3,4)]+[f'ptime{n}' for n in (3,5,7)]
 
 # ---- layered (compound) policies: initial protection + profit management + mandatory exit, the earliest one firing ----
 def compound_parts(structure):
-    naked=ss.is_naked(structure);cal=structure=='calendar'
+    cls=ss.structure_class(structure);naked=cls in ('naked','credit');cal=cls in ('calendar','debit')
     init=['none','atr15x1','atr15x1.5','atr15x2','atr15x3','eatr15x1','eatr15x2','pct1','pct2']+(['loss50','loss100'] if naked else ['dloss30','dloss50'] if cal else ['pts100','pts200'])+['mloss2','mloss3','mloss5']   # margin-based cut-offs as initial protection (V4.9.9: 2 / 3 / 5%)
     manage=['none','trail15x1.5','trail15x2','trail15x3','be1c0','be2c0','gb1x0.5','gb2x0.5','trailpct1','trailpct2']
-    term=['none','time3','time5','time10','tod1515','wkend']+(['exp1','exp2'] if naked or structure=='futures_expiry' else [])
+    term=['none','time3','time5','time10','tod1515','wkend']+(['exp1','exp2'] if ss.expires(structure) else [])
     return init,manage,term
 def compound_rules(structure):
     init,manage,term=compound_parts(structure)
     return [f'c:{i}|{m}|{t}' for t in term for i in init for m in manage if (i,m,t)!=('none','none','none')]
 def compound_profits(structure):
-    return ['none']+(['tp25','tp50','tp75'] if ss.is_naked(structure) or structure=='calendar' else ['tpct2'])+['target15x2','target15x4']
+    return ['none']+(['tp25','tp50','tp75'] if ss.structure_class(structure) in ('naked','calendar','credit','debit') else ['tpct2'])+['target15x2','target15x4']
 def compound_neighbours(labels):
     """Neighbours of a layered policy: the same policy with its initial or management part one step away (same family)."""
     parts=[x[2:].split('|') for x in labels];pos={tuple(p):i for i,p in enumerate(parts)};out=[]
@@ -283,7 +284,7 @@ class Batch:
         op=np.array([p['status']=='open_at_data_end' for p in paths])
         self.xb[ar[op],last[op]]=10**9;self.xd[ar[op],last[op]]=10**9;self.hyp[ar[op],last[op]]=True
         self.markpu=self.R['mark']/self.units[:,None];self.row_ord=bars.ord[self.K]
-        self.mpu=np.array([ss.margin_per_unit(p['entry_day']) for p in paths],float)          # margin per unit on the entry day (mloss)
+        self.mpu=np.array([ss.margin_per_unit(p['entry_day']) for p in paths],float)*ss.margin_share(structure)   # margin per unit on the entry day (mloss; V4.9.14: x the structure's margin share)
         self._atr_sig={};self._atr_now={}
     def atr_sig(self,p):
         if p not in self._atr_sig:self._atr_sig[p]=self.bars.atr[p][self.t]
