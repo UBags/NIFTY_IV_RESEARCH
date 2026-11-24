@@ -1,3 +1,13 @@
+# V4.9.17 (2026-11-25)
+
+| Item | Change |
+|---|---|
+| Wide search stage 1: exact speed-ups | Configurations whose signal lists are identical (on synthetic markets 67-84% of the 1,445 repeat another's list) are run through the kernel and scored once, then expanded; robust() and the selection stay per configuration. The year sums are formed once per block (were once per left-out year); the left-out worst trade from prefix / suffix minima (was np.delete copies); score() skips sd / mean for the composite rank (unused); post_tax_cagr's yearly loop and robust()'s median run in numba with the same IEEE operations / order statistics (numpy fallback kept). Block size and selection unchanged. Results: stage-1 rows identical to V4.9.16 on 96 synthetic group scans (naked, calendar, futures; composite / lcb / worst; robust on / off; 1 and many blocks); post_tax_cagr bit-identical on 1,440 cases with NaN / inf / ties; robust identical except the sign of a tied zero (as numpy's own SIMD sort). Speed of the scoring part at production shapes (1,445 configurations, 9 halves, 6 scorings): 7.2 -> 4.1 ms per rule, about 1.6 ms with 30% distinct lists |
+| Stage-1 phase timing | Each stage-1 group file records seconds per phase (load, batch, evaluate, dedup, gather, kernel, score, select), the distinct signal lists and exit rows. `--groups side:structure:level,...` limits a run to those groups. `scripts/profile_stage1.py`: phase table for chosen groups of the real paths file (scratch folder) and the distinct-signal-list share per side |
+| Note | The stage-1 signature hashes the code, so stage-1 files made before V4.9.17 are recomputed once (results are the same) |
+| `run_v4_pipeline.sh` | Running-step check: no awk escape warning; only a pipeline tool itself or python / bash running it counts (not an editor or `tail` on its files) |
+| Tests | `tests/test_wide_search.py::SpeedV4917` 3 (robust kernel = numpy, tax loop = numpy bit for bit, configurations sharing a signal list get identical rows) |
+
 # V4.9.16 (2026-11-24)
 
 | Item | Change |

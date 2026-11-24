@@ -196,3 +196,34 @@ class CompositeV4913(unittest.TestCase):
 
 
 if __name__=='__main__':unittest.main()
+
+
+class SpeedV4917(Fixture):
+    """V4.9.17 exact speed-ups: numba robust median and yearly tax loop equal the numpy code; configurations sharing a signal list
+    are computed once and keep identical results."""
+    def test_robust_kernel_equals_numpy(self):
+        rnd=np.random.default_rng(4);cf=[f'N{N}_k{k}_m8_j{j}_tw2' for N in (3,5) for k in (0.25,0.5,1.0) for j in (0.25,1.5)]+['zone_only_tw2','x']
+        nb=ws.neighbours(cf)
+        for _ in range(20):
+            sc=np.round(rnd.normal(0,1,(len(cf),31)),1);sc[rnd.random(sc.shape)<.2]=-np.inf;sc[rnd.random(sc.shape)<.03]=np.nan
+            np.testing.assert_array_equal(ws.robust(sc,nb),ws._robust_numpy(sc,nb))
+    def test_tax_loop_equals_numpy(self):
+        from unittest import mock
+        rnd=np.random.default_rng(6)
+        for kind in ('half','quarter'):
+            per=ws.Periods('2021-09-01','2026-01-01','2026-07-01',kind)
+            for t in range(10):
+                v=rnd.normal(0,.3,(20,15,len(per.train)));v[rnd.random(v.shape)<.05]=0.
+                if t%3==0:v[rnd.random(v.shape)<.02]=np.nan
+                for y,keep,yrs in ws.scorings(per):
+                    a=ws.post_tax_cagr(v,per.train,keep,yrs,.35)
+                    with mock.patch.object(ws.zg,'HAVE_NUMBA',False):b=ws.post_tax_cagr(v,per.train,keep,yrs,.35)
+                    self.assertTrue(np.array_equal(a.view(np.uint64),b.view(np.uint64)))
+    def test_configurations_sharing_a_signal_list_get_identical_rows(self):
+        p=self.paths_db();db=sqlite3.connect(p);sig=db.execute("SELECT bar FROM signals WHERE config='zone_only_tw2' AND side='bull'").fetchall()
+        db.executemany('INSERT INTO signals VALUES(?,?,?)',[('N3_k0.5_m8_j0.25_tw2','bull',t) for (t,) in sig]);db.commit();db.close()   # a twin of zone_only_tw2
+        per=ws.Periods('2024-01-01','2024-01-25','2024-03-01','quarter');Stage1V4913._ctx(self,p,per,K=3);zg._CTX['robust']=False
+        res=ws.scan_group(('bull','naked',0.));self.assertLess(res['distinct_signal_lists'],res['configs'])
+        rows=lambda cf:sorted((r['profit'],r['stop'],r['train'],r['oos'],r['trades'],r['worst_trade'],r['scores']) for r in res['rows'] if r['config']==cf)
+        self.assertTrue(rows('zone_only_tw2'));self.assertEqual(rows('zone_only_tw2'),rows('N3_k0.5_m8_j0.25_tw2'))
+        self.assertIn('kernel',res['phases'])

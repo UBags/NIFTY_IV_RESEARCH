@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "nifty-iv-research"
-version = "4.9.16+research"   # PEP 440 form of src/nifty_iv/VERSION.txt (the release string written into run metadata)
+version = "4.9.17+research"   # PEP 440 form of src/nifty_iv/VERSION.txt (the release string written into run metadata)
 description = "NIFTY zone + swing option-selling research and relative-IV calendar research (research software, not a trading system)"
 readme = "README.md"
 requires-python = ">=3.10"

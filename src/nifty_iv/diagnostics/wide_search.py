@@ -81,18 +81,38 @@ def post_tax_cagr(v,labels,keep,yrs,tax):
     `tax` after setting off losses carried forward from earlier years, the after-tax yearly returns compounded over `yrs` years
     (no interest, no reinvestment of FD income; -1 if the account is wiped out)."""
     v=np.asarray(v,float);years=sorted({p[:4] for p,k in zip(labels,keep) if k})
-    cf=np.zeros(v.shape[:-1]);g=np.ones(v.shape[:-1])
-    for y in years:
-        m=np.array([k and p[:4]==y for p,k in zip(labels,keep)]);r=v[...,m].sum(-1)
-        used=np.where(r>0,np.minimum(cf,r),0.);cf=np.where(r<0,cf-r,cf-used);g=g*(1+r-tax*np.maximum(r-used,0.))
+    R=[v[...,np.array([k and p[:4]==y for p,k in zip(labels,keep)])].sum(-1) for y in years]   # each year's net return (numpy sums, as before)
+    if zg.HAVE_NUMBA and R and v.ndim>1:
+        g=_tax_years(np.ascontiguousarray(np.stack(R).reshape(len(R),-1)),float(tax)).reshape(v.shape[:-1])
+    else:
+        cf=np.zeros(v.shape[:-1]);g=np.ones(v.shape[:-1])
+        for r in R:used=np.where(r>0,np.minimum(cf,r),0.);cf=np.where(r<0,cf-r,cf-used);g=g*(1+r-tax*np.maximum(r-used,0.))
     with np.errstate(invalid='ignore'):return np.where(g>0,np.power(np.maximum(g,1e-300),1/yrs)-1,-1.)
+
+@_jit
+def _tax_years(R,tax):
+    """post_tax_cagr's yearly loop element by element (the same IEEE operations in the same order as the numpy expressions;
+    np.minimum / np.maximum NaN semantics): the after-tax growth factor of each column of R (years, n)."""
+    Y,N=R.shape;out=np.empty(N)
+    for i in range(N):
+        cf=0.;g=1.
+        for y in range(Y):
+            r=R[y,i]
+            if r>0:used=cf if (cf<=r or cf!=cf) else r
+            else:used=0.
+            cf=cf-r if r<0 else cf-used
+            x=r-used;mx=x if (x>=0. or x!=x) else 0.
+            g=g*((1+r)-tax*mx)
+        out[i]=g
+    return out
 
 def composite(v,labels,keep,yrs,c):
     """User objective (2026-11-24): 0.4 / max(range of half-year returns, range_floor) counted only when post-tax CAGR > target,
     + 0.4 x 7 x [post-tax CAGR > target] (or a ramp from ramp_from to target if ramp_from is set), + 0.2 x 40 x post-tax CAGR,
     - 2.8 x [range > range_cap]. Arrays (..., periods)."""
     v=np.asarray(v,float);k=np.asarray(keep,bool);cg=post_tax_cagr(v,labels,k,yrs,c['tax'])
-    rng=(v[...,k].max(-1)-v[...,k].min(-1)) if k.any() else np.zeros(v.shape[:-1])
+    vk=v if k.all() else v[...,k]
+    rng=(vk.max(-1)-vk.min(-1)) if k.any() else np.zeros(v.shape[:-1])
     hit=cg>c['target']
     ramp=hit*1. if c.get('ramp_from') is None else np.clip((cg-c['ramp_from'])/(c['target']-c['ramp_from']),0.,1.)
     return .4/np.maximum(rng,c['range_floor'])*hit+.4*7*ramp+.2*40*cg-2.8*(rng>c.get('range_cap',np.inf))
@@ -254,8 +274,10 @@ def score(v,n,keep,yrs,rank,min_trades,min_annual,ppy,worst=None,max_loss=np.inf
     deviation; sharpe: mean / sd; worst: the worst period."""
     V_=v;v=v[...,keep];annual=v.sum(-1)/yrs
     with np.errstate(divide='ignore',invalid='ignore'):
-        sd=v.std(-1) if v.shape[-1] else annual*0;mean=v.mean(-1) if v.shape[-1] else annual*0
-        s=composite(np.asarray(V_,float),labels,keep,yrs,comp) if rank=='composite' else annual-sd*math.sqrt(ppy) if rank=='lcb' else np.where(sd>0,mean/sd,np.where(mean>0,1e6,-1e6))*math.sqrt(ppy) if rank=='sharpe' else v.min(-1)-1e-3*sd
+        if rank=='composite':s=composite(np.asarray(V_,float),labels,keep,yrs,comp)        # sd / mean unused: not computed
+        else:
+            sd=v.std(-1) if v.shape[-1] else annual*0;mean=v.mean(-1) if v.shape[-1] else annual*0
+            s=annual-sd*math.sqrt(ppy) if rank=='lcb' else np.where(sd>0,mean/sd,np.where(mean>0,1e6,-1e6))*math.sqrt(ppy) if rank=='sharpe' else v.min(-1)-1e-3*sd
     ok=(n>=min_trades)&(annual>=min_annual)
     if worst is not None:ok&=worst>=-max_loss
     return np.where(ok,s,-np.inf)
@@ -285,9 +307,37 @@ def neighbours(configs):
                     if w in by and k<11:out[i,k]=idx[by[w]];k+=1
     return out
 
+@_pjit
+def _robust_kernel(sc,nb):
+    """robust() for every (configuration, rule): the same order statistic as np.sort along the neighbours (NaN after +inf)."""
+    C,B=sc.shape;W=nb.shape[1];out=np.empty((C,B))
+    for c in _prange(C):
+        cnt=0
+        for k in range(W):
+            if nb[c,k]>=0:cnt+=1
+        kk=cnt//2;buf=np.empty(W)
+        for b in range(B):
+            s=sc[c,b]
+            if not math.isfinite(s):out[c,b]=-np.inf;continue
+            n=0
+            for k in range(W):
+                j=nb[c,k]
+                if j>=0:buf[n]=sc[j,b];n+=1
+            for q in range(n,W):buf[q]=np.inf                                         # padding, as robust's np.inf
+            for q in range(1,W):                                                       # insertion sort; NaN greatest (np.sort order)
+                x=buf[q];i=q-1
+                while i>=0 and (buf[i]>x or (buf[i]!=buf[i] and x==x)):buf[i+1]=buf[i];i-=1
+                buf[i+1]=x
+            out[c,b]=buf[kk]
+    return out
+
 def robust(sc,nb):
     """Median score over each configuration and its neighbours (the upper middle value for an even count, never an average with a
     failing one; unscored neighbours ignored, failing ones count as -inf); -inf where the configuration itself fails."""
+    if zg.HAVE_NUMBA:return _robust_kernel(np.ascontiguousarray(sc,np.float64),np.ascontiguousarray(nb,np.int64))
+    return _robust_numpy(sc,nb)
+
+def _robust_numpy(sc,nb):
     g=np.sort(np.where(nb[:,:,None]>=0,sc[np.maximum(nb,0)],np.inf),1)                # (configurations, 11, rules); padding sorts last
     k=((nb>=0).sum(1)//2)[:,None,None]                                                 # upper middle of the present values
     m=np.take_along_axis(g,np.broadcast_to(k,(g.shape[0],1,g.shape[2])),1)[:,0,:]
@@ -297,7 +347,9 @@ def _group_name(g):return f'{g[0]}_{g[1]}_{int(g[2]):+d}'
 
 def scan_group(g):
     """Stage 1 for one group: the --per-config best rules of every configuration under every scoring. Runs in a worker."""
-    c=zg._CTX;side,st,off=g;t0=time.time();per=c['per']
+    c=zg._CTX;side,st,off=g;t0=time.time();per=c['per'];ph=collections.Counter();tq=time.perf_counter()
+    def lap(k):
+        nonlocal tq;t=time.perf_counter();ph[k]+=t-tq;tq=t
     if zg._nb is not None:zg._nb.set_num_threads(max(1,min(zg._nb.config.NUMBA_NUM_THREADS,(os.cpu_count() or 1)//max(1,c['workers']))))
     db=sqlite3.connect(f'file:{c["paths"]}?mode=ro',uri=True);stat=zg.fill_stats(db,side,st,off)
     if not zg.testable(stat,c['min_fill_rate']):db.close();return dict(group=g,skipped=f"fill rate {stat.get('fill_rate')}",rows=[])
@@ -306,14 +358,21 @@ def scan_group(g):
     if not filled:return dict(group=g,skipped='no trades',rows=[])
     ntr=sum(per.lo<=p['entry_day']<per.mid for p in filled)
     if ntr<c['min_trades']:return dict(group=g,skipped=f'{ntr} filled entries in the train window',rows=[])
-    b=zr.Batch(filled,c['bars'],st);h=per.ohi;ar=np.arange(b.Np)[None,:];cm=worst_marks(b)
+    lap('load');b=zr.Batch(filled,c['bars'],st);h=per.ohi;ar=np.arange(b.Np)[None,:];cm=worst_marks(b);lap('batch')
     configs=c['configs'];nb=neighbours(configs) if c['robust'] else None;by_bar=collections.defaultdict(list)
+    # configurations with the same signal list have identical results: the kernel and the scores run once per distinct list (ui:
+    # the configurations computed; cinv[ci]: the distinct list of configuration ci); robust() and the selection stay per configuration
+    uid={};ui=[];cinv=np.empty(len(configs),np.int64)
     for ci,cf in enumerate(configs):
-        for t in c['signals'].get((cf,side),()):by_bar[t].append(ci)
+        k=tuple(c['signals'].get((cf,side),()))
+        if k not in uid:uid[k]=len(ui);ui.append(ci)
+        cinv[ci]=uid[k]
+    for u,ci in enumerate(ui):
+        for t in c['signals'].get((configs[ci],side),()):by_bar[t].append(u)
     ts_=np.array(sorted(by_bar),np.int64);sizes=np.array([len(by_bar[t]) for t in ts_],np.int64)
     cfg=np.concatenate([np.asarray(by_bar[t],np.int64) for t in ts_]) if len(ts_) else np.zeros(0,np.int64)
     bar_of=np.repeat(np.arange(len(ts_)),sizes);order=np.argsort(cfg,kind='stable');cbar=bar_of[order].astype(np.int64)
-    C=len(configs);cptr=np.zeros(C+1,np.int64);np.add.at(cptr,cfg+1,1);cptr=np.cumsum(cptr)
+    C=len(configs);CU=len(ui);cptr=np.zeros(CU+1,np.int64);np.add.at(cptr,cfg+1,1);cptr=np.cumsum(cptr)
     idx={p['signal_bar']:i for i,p in enumerate(filled)};pix=np.array([idx.get(int(t),-1) for t in ts_],np.int64)
     gx=np.array([gaps.get(int(t),-1) if idx.get(int(t)) is None else -1 for t in ts_],np.int64)
     units=b.units*c['scale'];RV=b.row_value(h)
@@ -324,28 +383,35 @@ def scan_group(g):
     S_=scorings(per);NS=len(S_);NT,NO,NY=len(per.train),len(per.oos),len(per.years);ppy=2 if per.kind=='half' else 4
     K=c['per_config'];best=[[[] for _ in range(C)] for _ in range(NS)];thr=np.full((NS,C),-np.inf)
     P=zr.profit_rules(st);chunks=zg.stop_chunks(zr.stop_rules(st)+(zr.compound_rules(st) if c['compound'] else []))
-    PC=[x for x in zr.compound_profits(st) if x in P];pc_idx=np.array([P.index(x) for x in PC]);FP=zr.evaluate(P,b);rules_seen=0
-    block=max(16,int(c['mem']//max(1,C*(NT*(NY+1)+NO+2*NY+3)*8*(2 if c['robust'] else 1))))
+    lap('setup');PC=[x for x in zr.compound_profits(st) if x in P];pc_idx=np.array([P.index(x) for x in PC]);FP=zr.evaluate(P,b);rules_seen=0;lap('evaluate')
+    block=max(16,int(c['mem']//max(1,C*(NT*(NY+1)+NO+2*NY+3)*8*(2 if c['robust'] else 1))))   # unchanged: the block size can decide ties in the selection
     loss=c['max_trade_loss']/c['min_weight']                                          # a candidate may enter at the smallest size
     for kind,S in chunks.items():
         Pk=PC if kind.startswith('compound') else P;FPk=FP[pc_idx] if kind.startswith('compound') else FP
-        FS=zr.evaluate(S,b);J=np.minimum(FPk[:,None,:],FS[None,:,:]).reshape(len(Pk)*len(S),b.Np);rules_seen+=len(J)
-        first,inv=zg._dedup_rows(J);J=J[first]
+        lap('setup');FS=zr.evaluate(S,b);lap('evaluate');J=np.minimum(FPk[:,None,:],FS[None,:,:]).reshape(len(Pk)*len(S),b.Np);rules_seen+=len(J)
+        first,inv=zg._dedup_rows(J);J=J[first];lap('dedup')
         XB=np.ascontiguousarray(b.xb[ar,J].T,np.int64);Pv=RV[ar,J].T;XD=np.minimum(b.xd[ar,J],h).T
         V=np.ascontiguousarray((Pv*units[:,None])/c['capital'])                      # = (P x units / 1) / capital, as the engine
         WL=np.ascontiguousarray((np.minimum(np.minimum(cm[ar,J].T,Pv),0.)*units[:,None])/c['capital'])   # worst open loss, as Engine.W
         PT=np.where(ent_tr[:,None]&(XD>=per.olo)&(XD<per.omid),np.searchsorted(per.tstart,XD,'right')-1,-1).astype(np.int64)
         PO=np.where(ent_all[:,None]&(XD>=per.omid)&(XD<per.ohi),np.searchsorted(per.ostart,XD,'right')-1,-1).astype(np.int64)
+        lap('gather')
         for b0 in range(0,len(first),block):
             sl=slice(b0,min(b0+block,len(first)));B=sl.stop-sl.start
             tr,oo,ey,n,ny,wt,wy=_scan_kernel(ts_,cptr,cbar,pix,gx,np.ascontiguousarray(XB[:,sl]),np.ascontiguousarray(V[:,sl]),np.ascontiguousarray(WL[:,sl]),
-                                             np.ascontiguousarray(PT[:,sl]),np.ascontiguousarray(PO[:,sl]),EY,C,B,NT,NO,NY)
-            sc=np.empty((NS,C,B))
+                                             np.ascontiguousarray(PT[:,sl]),np.ascontiguousarray(PO[:,sl]),EY,CU,B,NT,NO,NY)
+            lap('kernel');scu=np.empty((NS,CU,B));sc=np.empty((NS,C,B))
+            if NS>1:                                                                  # once per block, not once per left-out year
+                eys=ey.sum(-1);z=np.zeros(wy.shape[:-1]+(1,))
+                pre=np.minimum.accumulate(np.concatenate([z,wy],-1),-1)               # pre[..., j] = min(0, wy[..., :j])
+                suf=np.minimum.accumulate(np.concatenate([wy,z],-1)[...,::-1],-1)[...,::-1]   # suf[..., j] = min(0, wy[..., j:])
             for si,(y,keep,yrs) in enumerate(S_):
                 if y is None:v,nn,ww=tr,n,wt
-                else:j=per.years.index(y);v=ey.sum(-1)-ey[...,j];nn=n-ny[...,j];ww=np.delete(wy,j,-1).min(-1,initial=0.)
-                sc[si]=score(v,nn,keep,yrs,c['rank'],c['min_trades'],c['cand_min_annual'],ppy,ww,loss,per.train,c.get('comp'))
+                else:j=per.years.index(y);v=eys-ey[...,j];nn=n-ny[...,j];ww=np.minimum(pre[...,j],suf[...,j+1])   # = np.delete(wy, j).min(initial=0)
+                scu[si]=score(v,nn,keep,yrs,c['rank'],c['min_trades'],c['cand_min_annual'],ppy,ww,loss,per.train,c.get('comp'))
+                sc[si]=scu[si][cinv]                                                    # every configuration's scores
                 if nb is not None:sc[si]=robust(sc[si],nb)
+            lap("score");ph["unique_rules"]+=B
             for si in range(NS):
                 cc,uu=np.nonzero(sc[si]>thr[si][:,None])
                 for ci in np.unique(cc):
@@ -353,18 +419,20 @@ def scan_group(g):
                     for u in us:
                         s_=float(sc[si,ci,u])
                         if len(L)>=K and s_<=L[-1][0]:break
-                        key=tr[ci,u].tobytes()+oo[ci,u].tobytes()
+                        cu=cinv[ci];key=tr[cu,u].tobytes()+oo[cu,u].tobytes()
                         if any(k==key for _,k,_ in L):continue
-                        r=int(first[b0+u]);rec=dict(config=configs[ci],profit=Pk[r//len(S)],stop=S[r%len(S)],trades=int(n[ci,u]),worst_trade=float(wt[ci,u]),
-                                                    train=tr[ci,u].tolist(),oos=oo[ci,u].tolist(),scores=[float(x) for x in sc[:,ci,u]])
+                        r=int(first[b0+u]);rec=dict(config=configs[ci],profit=Pk[r//len(S)],stop=S[r%len(S)],trades=int(n[cu,u]),worst_trade=float(wt[cu,u]),
+                                                    train=tr[cu,u].tolist(),oos=oo[cu,u].tolist(),scores=[float(x) for x in sc[:,ci,u]])
                         L.append((s_,key,rec));L.sort(key=lambda x:-x[0]);del L[K:]
                     if len(L)>=K:thr[si,ci]=L[-1][0]
+            lap('select')
     rows={}
     for si in range(NS):
         for L in best[si]:
             for _,key,rec in L:rows.setdefault((rec['config'],key),rec)
     out=[dict(side=side,structure=st,level=int(off),**r) for r in rows.values()]
-    return dict(group=g,rows=out,seconds=round(time.time()-t0,1),fill_rate=stat.get('fill_rate'),paths=len(filled),rules=rules_seen,configs=C)
+    return dict(group=g,rows=out,seconds=round(time.time()-t0,1),fill_rate=stat.get('fill_rate'),paths=len(filled),rules=rules_seen,configs=C,distinct_signal_lists=CU,
+                phases={k:round(v,2) for k,v in ph.items() if k!='unique_rules'},unique_rules=int(ph['unique_rules']))
 
 # ------------------------------------------------------------------ stage 2: the account
 def strategy_key(r):return (r['side'],r['structure'],float(r['level']),r['config'],r['profit'],r['stop'])
@@ -508,7 +576,8 @@ def main(argv=None):
     ap=cli.Parser(description=__doc__)
     ap.add_argument('--paths',required=True,help='paths file (nifty-zone-paths)')
     ap.add_argument('--holidays',help='exchange holiday list (weekend exits), as the grid uses');ap.add_argument('--gap-policy',choices=zg.GAP_POLICIES,default='busy')
-    ap.add_argument('--structures',help='limit to these structures (comma separated)');ap.add_argument('--no-compound',action='store_true',help='skip the layered policies')
+    ap.add_argument('--structures',help='limit to these structures (comma separated)')
+    ap.add_argument('--groups',help='limit to these groups: side:structure:level, comma separated (e.g. bull:naked:-1,bear:vert_w1:2; profiling)');ap.add_argument('--no-compound',action='store_true',help='skip the layered policies')
     ap.add_argument('--min-fill-rate',type=float,default=zg.MIN_FILL_RATE,help='fill-rate gate per group (default %(default)s)')
     ap.add_argument('--capital',type=float,default=2.5e6,help='base of every return (default 25 lakh)')
     ap.add_argument('--scale',type=float,help="rupee multiplier (default 1 / the paths file's --target-fraction: full size)")
@@ -552,6 +621,10 @@ def main(argv=None):
     for cf,side,t in db.execute('SELECT config,side,bar FROM signals ORDER BY bar'):signals[cf,side].append(t)
     groups=db.execute('SELECT DISTINCT side,structure,offset FROM paths ORDER BY 2,1,3').fetchall();db.close()
     if a.structures:groups=[g for g in groups if g[1] in a.structures.split(',')]
+    if a.groups:
+        want={(x.split(':')[0],x.split(':')[1],float(x.split(':')[2])) for x in a.groups.split(',') if x}
+        groups=[g for g in groups if (g[0],g[1],float(g[2])) in want]
+        if not groups:sys.exit(f'--groups: none of {sorted(want)} is in the paths file')
     sig=_signature(a,a.paths,scale,hol,gp);configs=sorted({cf for cf,_ in signals})
     zg._CTX.clear();zg._CTX.update(paths=a.paths,bars=bars,signals=dict(signals),configs=configs,per=per,scale=scale,capital=a.capital,rank=a.rank,
         min_trades=a.min_trades,cand_min_annual=a.cand_min_annual,per_config=a.per_config,compound=not a.no_compound,min_fill_rate=a.min_fill_rate,
