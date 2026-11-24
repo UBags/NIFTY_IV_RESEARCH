@@ -634,13 +634,13 @@ def main():
     if not 0<a.max_participation<=1 or not 0<a.target_fraction<=1 or a.entry_bars<1 or a.entry_minutes<0:sys.exit('--max-participation and --target-fraction must be in (0, 1], --entry-bars >= 1, --entry-minutes >= 0')
     a.entry_minutes=a.entry_minutes or None
     structures=[s for s in a.structures.split(',') if s]
-    bad=set(structures)-set(OPTION_STRUCTURES+FUTURES_STRUCTURES)
+    bad=set(structures)-set(OPTION_STRUCTURES+ss.COMBO_STRUCTURES+FUTURES_STRUCTURES)   # V4.9.14 combos are option structures too
     if bad:sys.exit(f'Unknown structures {sorted(bad)}')
     market=zb.Market(a.options,a.spot,keep=2);planned=market.meta.get('plan',{})
     missing=sorted(set(a.offsets)-set(planned.get('offsets',list(zb.OFFSETS))))
     if missing:sys.exit(f'Offsets {missing} were not in the contract extraction (planned {planned.get("offsets")})')
     if planned.get('offset_mode','points')!=a.offset_mode:sys.exit(f"--offset-mode {a.offset_mode} differs from the contract extraction ({planned.get('offset_mode','points')})")
-    unplanned=sorted(set(s for s in structures if s in OPTION_STRUCTURES)-set(planned.get('structures',['naked','calendar'])))
+    unplanned=sorted(set(s for s in structures if s in OPTION_STRUCTURES or ss.is_combo(s))-set(planned.get('structures',['naked','calendar'])))
     if unplanned:sys.exit(f'Structures {unplanned} were not in the contract extraction (planned {planned.get("structures",["naked","calendar"])}): rerun nifty-zone-contracts --structures')
     for key in ('min_short_days','long_target','from_date','to_date'):
         if key in planned and planned[key]!=getattr(a,key):sys.exit(f'--{key.replace("_","-")} differs from the contract extraction ({planned[key]})')

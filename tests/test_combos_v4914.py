@@ -146,4 +146,26 @@ class MergeV4914(Market):
         self.assertNotEqual(r.returncode,0);self.assertIn('bars tables differ',r.stderr+r.stdout)
 
 
+class CliV4914(Market):
+    """nifty-zone-paths main(): the combo structures pass the structure check (the V4.9.14 release rejected them as unknown)."""
+    def _main(self,structures,out):
+        import io,contextlib;from unittest import mock
+        old=sys.argv;sys.argv=['nifty-zone-paths','--options',str(self.op),'--spot',str(self.sp),'--structures',structures,'--lots','1','--out',str(out)]
+        try:                                                                  # the flat synthetic spot has no signals: one bull entry at bar 0
+            with contextlib.redirect_stdout(io.StringIO()) as buf,mock.patch.object(zp.zb,'entry_map',lambda *a:{0:['bull']}):zp.main()
+            return buf.getvalue()
+        finally:sys.argv=old
+    def test_paths_main_accepts_planned_combos_and_rejects_the_rest(self):
+        self.build(days=sessions('2024-01-02',19),weekly='2024-01-11',extra=('2024-01-18','2024-01-25'));d=Path(self.tmp.name)
+        db=sqlite3.connect(self.op);db.execute('CREATE TABLE IF NOT EXISTS meta(name TEXT PRIMARY KEY,value TEXT)')
+        db.execute("INSERT OR REPLACE INTO meta VALUES('plan',?)",(json.dumps(dict(structures=['naked','married','vert_w1'])),));db.commit();db.close()
+        out=self._main('futures_zone,futures_expiry,married,vert_w1',d/'p.sqlite');self.assertIn('paths',out)
+        st={r[0] for r in sqlite3.connect(d/'p.sqlite').execute('SELECT DISTINCT structure FROM paths')}
+        self.assertEqual(st,{'futures_zone','futures_expiry','married','vert_w1'})
+        with self.assertRaises(SystemExit) as e:self._main('married,longopt',d/'q.sqlite')
+        self.assertIn('not in the contract extraction',str(e.exception));self.assertIn('longopt',str(e.exception))
+        with self.assertRaises(SystemExit) as e:self._main('married,bogus',d/'r.sqlite')
+        self.assertIn("Unknown structures ['bogus']",str(e.exception))
+
+
 if __name__=='__main__':unittest.main()
