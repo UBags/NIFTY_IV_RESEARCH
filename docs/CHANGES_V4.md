@@ -1,3 +1,11 @@
+# V4.9.15 (2026-11-24)
+
+| Item | Change |
+|---|---|
+| Per-trade loss limit (user) | `nifty-diag-wide-search --max-trade-loss` default 0.03 -> 0.099. In v3, 619 of 681 option strategies (31% of their trades) went beyond 3% at full size, so 3% forced every strategy to 1/4 size; beyond 9.9-10% only 3% of those strategies' trades. 9.9% keeps 12,285 pairs (all 9 train halves > 0, post-tax CAGR > 20%; 7,200 also positive in 2026H1) against 12,551 at 10% and 0 at 3-5%. Worst losses are at 45-minute bar closes: true intraday worst somewhat deeper |
+| `scripts/trade_loss_counts.py` | Per strategy, trades whose worst open loss exceeds 3 / 5 / 7.5 / 9.9 / 10 / 12.5% of capital, by entry year. With `--entry-end` = split its worst trade equals the wide search's `worst_trade` (checked on 681 real strategies: max difference 5e-6, the CSV rounding) |
+| `scripts/pair_picker.py` (user) | Green + red pairs from candidates.csv with a different strategy in every pair (`--distinct signal` default: no signal configuration repeats on either side; `level`, `rule`). Criteria: per-leg worst trade (`--max-trade-loss` 0.099), train drawdown (`--max-dd` 0.20), trades (`--min-trades` 20); pair post-tax CAGR (`--cagr-floor` 0.20), positive halves (`--min-positive` 0.85; all-positive ranked first), range (`--range-cap` 0.40); ranked by the composite objective. `--loyo` repeats the pick with each year left out. v3: 5 pairs all 9/9 positive, post-tax CAGR 43-49%, 2026H1 +29, +26, -7, -6, +18%; held-out pair-halves 45, negative 2, mean 24.5%, worst -10.2%. `tests/test_pair_picker.py` (2) |
+
 # V4.9.14 (2026-11-24)
 
 | Item | Change |

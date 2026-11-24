@@ -21,7 +21,7 @@ Stage 2  account. The pool is recomputed with the exact engine (the stage-1 figu
          forward selection of (strategy, size) pairs, size from --weights (share of full size), maximising the account objective
          of nifty-diag-trade-structure on the train periods: worst period, minus 2 x any shortfall of the yearly return below
          --min-annual, minus 0.001 x the spread; subject to peak margin exposure (sum of size x position open, bar by bar, train
-         period) <= --max-exposure, every strategy's size x worst trade loss <= --max-trade-loss (user: 3%), and the account's
+         period) <= --max-exposure, every strategy's size x worst trade loss <= --max-trade-loss (user: 9.9%; 3% until V4.9.15), and the account's
          equity drawdown (daily mark-to-market: realised legs plus open positions at each day's last bar close) <=
          --max-dd (user: 20%). Then single replacements / resizes / removals until no improvement. Up to --max-strategies.
 Stage 3  exit baskets (--baskets K > 1): each chosen strategy's position split into K slices, each with its own exit pair from
@@ -526,7 +526,7 @@ def main(argv=None):
     ap.add_argument('--per-config',type=int,default=2,help='stage 1: best rules kept per configuration and scoring (default %(default)s)')
     ap.add_argument('--robust',action=argparse.BooleanOptionalAction,default=True,help='stage 1: rank each configuration by the median score of it and its neighbouring configurations (one swing-filter parameter one step away), same rule (default on)')
     ap.add_argument('--pool-per-family',type=int,default=40,help='stage 2: best candidates per side x structure, per scoring (default %(default)s)')
-    ap.add_argument('--max-trade-loss',type=float,default=.03,help='worst open loss of any trade x its size, share of --capital (user rule; default %(default)s); stage 1 keeps candidates within it at the smallest --weights size')
+    ap.add_argument('--max-trade-loss',type=float,default=.099,help='worst open loss of any trade x its size, share of --capital (user rule, was 0.03 until V4.9.15; default %(default)s); stage 1 keeps candidates within it at the smallest --weights size')
     ap.add_argument('--max-dd',type=float,default=.20,help='account equity drawdown (daily mark-to-market, train period), share of --capital (default %(default)s)')
     ap.add_argument('--min-annual',type=float,default=.35,help='account objective: yearly return required (shortfall penalised), share of --capital (default %(default)s)')
     ap.add_argument('--weights',default='0.25,0.5,0.75,1',help='position sizes a strategy may take, share of full size (default %(default)s)')

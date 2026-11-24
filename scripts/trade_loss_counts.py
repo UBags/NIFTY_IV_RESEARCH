@@ -12,7 +12,7 @@ import numpy as np
 from nifty_iv.zone import grid as zg, rules as zr
 from nifty_iv.diagnostics import trade_structure as ts, wide_search as ws
 
-THR=(.03,.05,.075,.10,.125)
+THR=(.03,.05,.075,.099,.10,.125)
 
 def main(argv=None):
     ap=argparse.ArgumentParser(description=__doc__,formatter_class=argparse.RawDescriptionHelpFormatter)
