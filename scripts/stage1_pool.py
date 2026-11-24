@@ -9,8 +9,10 @@ the train account drawdown.
 
 Stage 1 keeps, per signal configuration, its best --per-config exits under each of the wide search's scorings, so its files hold
 far more strategies than the pool. Kept here: --structures (default: the options), train trades >= --min-trades, worst open trade
-loss within --max-trade-loss, a finite stage-1 score; identical results once; then the --top best per side by the stage-1 score on
-all train years (--top 0: all of them). Note: stage 1 already dropped strategies whose worst trade exceeded its own limit
+loss within --max-trade-loss, a finite stage-1 score; identical results once; then, per side:
+  --select score (default): the --top best by the stage-1 score on all train years (--top 0: all of them);
+  --select v3: the wide search's own pool rule with a larger quota: the best N of every structure under each of its scorings (all
+               train years, and each year left out), united; N is the largest that keeps the union within --top (all if fewer). Note: stage 1 already dropped strategies whose worst trade exceeded its own limit
 (--max-trade-loss / smallest --weights of that run).
 Each kept strategy is recomputed with the wide search's engine (same windows, read from the run's stage-1 signature when present):
 halves and quarters, train and out of sample, trades, worst trade, train account drawdown (daily mark-to-market, as the wide search).
@@ -31,7 +33,8 @@ def main(argv=None):
     ap.add_argument('--train-start',default=None,help='default: from the run, else 2021-09-01');ap.add_argument('--split',default=None,help='default: from the run, else 2026-01-01')
     ap.add_argument('--end',default=None,help='default: from the run, else 2026-07-01')
     ap.add_argument('--structures',default=OPTIONS);ap.add_argument('--min-trades',type=int,default=15)
-    ap.add_argument('--max-trade-loss',type=float,default=.099);ap.add_argument('--top',type=int,default=1000,help='best per side (0 = all)')
+    ap.add_argument('--max-trade-loss',type=float,default=.099);ap.add_argument('--top',type=int,default=1000,help='strategies per side (0 = all)')
+    ap.add_argument('--select',choices=('score','v3'),default='score',help='score: best by the all-years stage-1 score; v3: the wide search pool rule (per structure, every scoring)')
     ap.add_argument('--out',required=True)
     a=ap.parse_args(argv);t0=time.time();sts=set(a.structures.split(','));out=os.path.abspath(a.out);os.makedirs(out,exist_ok=True)
     files=sorted(glob.glob(os.path.join(a.run,'stage1','*.json.gz')))
@@ -47,15 +50,32 @@ def main(argv=None):
     if sig.get('capital') not in (None,a.capital):print(f"note: the run used capital {sig['capital']}, here {a.capital}")
     print('stage1_pool '+' '.join(f'--{k.replace("_","-")} {v}' for k,v in vars(a).items()),flush=True)
     print(f'{len(files)} stage-1 files, {len(rows):,} option strategies',flush=True)
-    keep=collections.defaultdict(list);seen=set()
+    keep=collections.defaultdict(list);seen=set();fin=(lambda r:np.isfinite(r['scores'][0])) if a.select=='score' else (lambda r:bool(np.isfinite(r['scores']).any()))
     for r in rows:
-        if r['trades']<a.min_trades or r['worst_trade']<-a.max_trade_loss or not np.isfinite(r['scores'][0]):continue
+        if r['trades']<a.min_trades or r['worst_trade']<-a.max_trade_loss or not fin(r):continue
         k=(r['side'],tuple(r['train']),tuple(r['oos']),r['trades'],r['worst_trade'])
         if k in seen:continue
         seen.add(k);keep[r['side']].append(r)
-    for s in keep:keep[s].sort(key=lambda r:-r['scores'][0])
     print('within the limits (distinct results): '+', '.join(f'{s} {len(v):,}' for s,v in sorted(keep.items())),flush=True)
-    todo=[r for s in sorted(keep) for r in (keep[s][:a.top] if a.top else keep[s])]
+    if a.select=='score':
+        for s in keep:keep[s].sort(key=lambda r:-r['scores'][0])
+        todo=[r for s in sorted(keep) for r in (keep[s][:a.top] if a.top else keep[s])]
+    else:
+        todo=[]
+        for s in sorted(keep):
+            R=keep[s];NS=len(R[0]['scores']);fam=collections.defaultdict(list)
+            for i,r in enumerate(R):fam[r['structure']].append(i)
+            order=[[sorted((i for i in ids if np.isfinite(R[i]['scores'][si])),key=lambda i:-R[i]['scores'][si]) for si in range(NS)] for ids in fam.values()]
+            union=lambda N:{i for L in order for o in L for i in o[:N]}
+            cap=max((len(o) for L in order for o in L),default=0);lo,hi=0,cap
+            if a.top==0 or len(union(cap))<=a.top:lo=cap
+            else:
+                while lo<hi:                                                  # largest N with |union| <= --top
+                    mid=(lo+hi+1)//2
+                    if len(union(mid))<=a.top:lo=mid
+                    else:hi=mid-1
+            U=sorted(union(lo));todo+=[R[i] for i in U]
+            print(f'  {s}: {len(fam)} structures x {NS} scorings, best {lo} of each -> {len(U):,} strategies',flush=True)
     todo.sort(key=lambda r:(r['side'],r['structure'],r['level']))
     db=sqlite3.connect(f'file:{a.paths}?mode=ro',uri=True)
     try:meta=json.loads(db.execute("SELECT value FROM meta WHERE name='args'").fetchone()[0])
