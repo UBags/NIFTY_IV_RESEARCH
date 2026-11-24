@@ -82,7 +82,7 @@ def funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F):
     for name,x in (('half',a.min_half),('quarter',a.min_quarter)):
         if x is None or name not in F:continue
         GT,BT,GO,BO,pt,po=F[name];c=floor_cols(pt,a);T=GT[gi][:,None,c]+BT[bi][None,:,c];mn=T.min(-1)
-        sel=m.copy();m&=mn>x;print(f'  every train {name} > {x:.0%}{"":19s} {dist(m)}')
+        sel=m.copy();m&=mn>x;print(f'  {"every train "+name+" > "+f"{100*x:g}%":40s} {dist(m)}')
         if sel.any():
             lab=np.array(pt)[c];arg=T.argmin(-1)[sel];vals=mn[sel]
             print(f'      before this floor: worst train {name} of the {int(sel.sum())} pairs: median {100*np.median(vals):.1f}%, best {100*vals.max():.1f}%; '
@@ -90,7 +90,7 @@ def funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F):
             cnt=np.bincount(arg,minlength=len(lab));top=np.argsort(-cnt)[:5]
             print(f'      {"halves" if name=="half" else "quarters"} that are most often the worst: '+', '.join(f'{lab[k]} {100*cnt[k]/len(arg):.0f}%' for k in top))
         if a.include_oos and len(po):
-            O=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1);sel=m.copy();m&=O>x;print(f'  every out-of-sample {name} > {x:.0%}{"":11s} {dist(m)}')
+            O=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1);sel=m.copy();m&=O>x;print(f'  {"every out-of-sample "+name+" > "+f"{100*x:g}%":40s} {dist(m)}')
             if sel.any():print(f'      before this floor: worst out-of-sample {name}: median {100*np.median(O[sel]):.1f}%, best {100*O[sel].max():.1f}%')
 
 def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
@@ -161,7 +161,7 @@ def main(argv=None):
         F['per_quarter']=pq;F['quarter']=(qv(G,tc,0),qv(B,tc,1),qv(G,oc,0),qv(B,oc,1),pq.train,pq.oos)
         okg&=np.isfinite(F['quarter'][0]).all(1);okb&=np.isfinite(F['quarter'][1]).all(1)
         if sum(miss):print(f'  no quarter figures for {miss[0]} green and {miss[1]} red strategies: left out')
-    fl=[f'every half > {a.min_half:.0%}' if a.min_half is not None else '',f'every quarter > {a.min_quarter:.0%}' if a.min_quarter is not None else '']
+    fl=[f'every half > {100*a.min_half:g}%' if a.min_half is not None else '',f'every quarter > {100*a.min_quarter:g}%' if a.min_quarter is not None else '']
     fl=' and '.join(x for x in fl if x)
     if fl:print(f"floors: {fl} ({'incl. out-of-sample: 2026H1 is no longer a test' if a.include_oos else 'train only'}"
                 f"{'' if a.floor_partial else ', partial first period skipped'})")
@@ -189,16 +189,26 @@ def main(argv=None):
         rows.append(row)
     with open(a.out,'w',newline='') as fh:
         w=csv.DictWriter(fh,list(rows[0]));w.writeheader();w.writerows(rows)
+    k=len(P);bh=sum(VG[i]+VB[j] for i,j,*_ in P)/k;bo=sum(F['half'][2][i]+F['half'][3][j] for i,j,*_ in P)/k
+    print(f'\nbasket: the {k} pairs together, 1/{k} of the capital each (each leg at 1/{k} size: worst trade '
+          f'{100*max(-wg[i] for i,*_ in P)/k:.1f}% / {100*max(-wb[j] for _,j,*_ in P)/k:.1f}% of capital)')
+    print('   halves '+' '.join(f'{100*x:.0f}' for x in bh)+(' | '+oh[0][4:]+' '+' '.join(f'{100*x:.0f}' for x in bo) if len(oh) else '')
+          +f' | post-tax CAGR {100*float(ws.post_tax_cagr(bh,per.train,keep,yrs,a.tax)):.1f}%, worst half {100*bh.min():.1f}%')
+    if 'quarter' in F:
+        GT,BT,GO,BO,pt,po=F['quarter'];bq=sum(GT[i]+BT[j] for i,j,*_ in P)/k;bqo=sum(GO[i]+BO[j] for i,j,*_ in P)/k;c=floor_cols(pt,a)
+        print('   quarters '+' '.join(f'{100*x:.0f}' for x in bq)+' | oos '+' '.join(f'{100*x:.0f}' for x in bqo)
+              +f' | worst full quarter {100*bq[c].min():.1f}%, negative {int((bq[c]<0).sum())}/{int(c.sum())}')
     if a.loyo:
         print('\nleave-one-year-out: the same pick on the other years; the picked pairs in the held-out year (each pair, %)')
-        held=[]
+        held=[];bheld=[]
         for y in per.years:
             k2,y2=ws.fold(per,y);P2=pick(G,B,VG,VB,okg,okb,per,k2,y2,a,a.top,F,held=y)
             hq=[q for q,p in enumerate(per.train) if p[:4]==y]
             if not P2:print(f'  {y}: no pair qualifies');continue
-            res=[[VG[i][q]+VB[j][q] for q in hq] for i,j,*_ in P2];held+=[x for r in res for x in r]
-            print(f"  {y}: "+'  '.join('/'.join(f'{100*x:.0f}' for x in r) for r in res))
+            res=[[VG[i][q]+VB[j][q] for q in hq] for i,j,*_ in P2];held+=[x for r in res for x in r];bk=np.mean(res,0);bheld+=list(bk)
+            print(f"  {y}: "+'  '.join('/'.join(f'{100*x:.0f}' for x in r) for r in res)+'   | basket '+'/'.join(f'{100*x:.0f}' for x in bk))
         if held:print(f'  held-out pair-halves: {len(held)}, negative {sum(x<0 for x in held)}, mean {100*np.mean(held):.1f}%, worst {100*min(held):.1f}%')
+        if bheld:print(f'  held-out basket halves: {len(bheld)}, negative {sum(x<0 for x in bheld)}, mean {100*np.mean(bheld):.1f}%, worst {100*min(bheld):.1f}%')
     print(f'-> {a.out}')
 
 if __name__=='__main__':main()
