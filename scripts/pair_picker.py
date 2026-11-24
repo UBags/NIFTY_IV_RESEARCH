@@ -65,6 +65,34 @@ def floors_ok(gi,bi,F,a,held):
         if a.include_oos and len(po):m&=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1)>x
     return m
 
+def funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F):
+    """Pairs left after each criterion in turn, and where the period floors bind."""
+    gi=np.flatnonzero(okg);bi=np.flatnonzero(okb);print(f'\nfunnel (pairs left after each criterion; distinct-signal pairs in brackets):')
+    def dist(m):
+        I,J=np.nonzero(m);ug={pp_key(G[gi[i]]) for i in I};ub={pp_key(B[bi[j]]) for j in J}
+        return f'{int(m.sum()):7d}  [green signals {len(ug)}, red signals {len(ub)}]'
+    pp_key=lambda r:key(r,a.distinct)
+    print(f'  all pairs                                {len(G)*len(B):7d}')
+    if not len(gi) or not len(bi):print('  none within the per-leg limits');return
+    V=VG[gi][:,None,:]+VB[bi][None,:,:];m=np.ones(V.shape[:2],bool);print(f'  legs within trade loss / DD / trades     {dist(m)}')
+    Vk=V[...,keep];cg=ws.post_tax_cagr(V,per.train,keep,yrs,a.tax)
+    for lab,c in ((f'post-tax CAGR >= {a.cagr_floor:.0%}',cg>=a.cagr_floor),(f'positive halves >= {a.min_positive:.0%}',(Vk>0).mean(-1)>=a.min_positive-1e-9),
+                  (f'half range <= {a.range_cap:.0%}',Vk.max(-1)-Vk.min(-1)<=a.range_cap)):
+        m&=c;print(f'  {lab:40s} {dist(m)}')
+    for name,x in (('half',a.min_half),('quarter',a.min_quarter)):
+        if x is None or name not in F:continue
+        GT,BT,GO,BO,pt,po=F[name];c=floor_cols(pt,a);T=GT[gi][:,None,c]+BT[bi][None,:,c];mn=T.min(-1)
+        sel=m.copy();m&=mn>x;print(f'  every train {name} > {x:.0%}{"":19s} {dist(m)}')
+        if sel.any():
+            lab=np.array(pt)[c];arg=T.argmin(-1)[sel];vals=mn[sel]
+            print(f'      before this floor: worst train {name} of the {int(sel.sum())} pairs: median {100*np.median(vals):.1f}%, best {100*vals.max():.1f}%; '
+                  +', '.join(f'> {100*t:g}%: {int((vals>t).sum())}' for t in (0,.02,.03,.05)))
+            cnt=np.bincount(arg,minlength=len(lab));top=np.argsort(-cnt)[:5]
+            print(f'      {"halves" if name=="half" else "quarters"} that are most often the worst: '+', '.join(f'{lab[k]} {100*cnt[k]/len(arg):.0f}%' for k in top))
+        if a.include_oos and len(po):
+            O=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1);sel=m.copy();m&=O>x;print(f'  every out-of-sample {name} > {x:.0%}{"":11s} {dist(m)}')
+            if sel.any():print(f'      before this floor: worst out-of-sample {name}: median {100*np.median(O[sel]):.1f}%, best {100*O[sel].max():.1f}%')
+
 def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
     """Greedy diverse pick on the halves in keep. Returns [(i, j, cagr, obj, positive share)]."""
     C=dict(tax=a.tax,target=a.cagr_floor,ramp_from=None,range_floor=a.range_floor,range_cap=a.range_cap)
@@ -103,6 +131,7 @@ def main(argv=None):
     ap.add_argument('--quarters',help='quarter returns per strategy, from scripts/strategy_periods.py --period quarter')
     ap.add_argument('--floor-partial',action='store_true',help='apply the floors to a partial first period too')
     ap.add_argument('--include-oos',action='store_true',help='apply the floors to the out-of-sample periods too (no out-of-sample test left)')
+    ap.add_argument('--funnel',action='store_true',help='print the pairs left after each criterion (always printed when none qualifies)')
     ap.add_argument('--loyo',action='store_true',help='also run the pick with each year left out and show the held-out returns')
     a=ap.parse_args(argv)
     print('pair_picker '+' '.join(f'--{k.replace("_","-")} {v}' for k,v in vars(a).items()),flush=True)
@@ -137,6 +166,7 @@ def main(argv=None):
     if fl:print(f"floors: {fl} ({'incl. out-of-sample: 2026H1 is no longer a test' if a.include_oos else 'train only'}"
                 f"{'' if a.floor_partial else ', partial first period skipped'})")
     keep,yrs=ws.fold(per);P=pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,a.top,F)
+    if a.funnel or not P:funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F)
     if not P:sys.exit('no pair meets the criteria; relax --cagr-floor / --min-positive / --min-half / --min-quarter / --max-trade-loss / --max-dd')
     nm=lambda r:f"{r['side']} {r['structure']} {int(float(r['level'])):+d} {r['config']} {r['profit']}/{r['stop']}"
     rows=[]

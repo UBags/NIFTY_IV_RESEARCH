@@ -5,6 +5,7 @@
 | Period floors (user) | `scripts/pair_picker.py --min-half X`: every train half-year of the pair > X; `--min-quarter X --quarters FILE`: every train quarter > X (default off). Partial first periods (2021H2 = Sep-Dec, 2021Q3 = Sep only) are skipped unless `--floor-partial`; `--include-oos` also applies the floors to 2026H1 / 2026Q1-Q2 (then nothing is out of sample). `--loyo` drops the held-out year from the floors. v3: the 5 default picks already have every half > 10%; with `--include-oos` pairs 3-4 (2026H1 -7%, -6%) are replaced (2026H1 +9%, +20% / +20%, +20%); held-out pair-halves negative 2-4 of 45, mean 24.5-25.3% |
 | `scripts/strategy_periods.py` | Quarter (or half) returns per strategy of a candidates.csv from the paths file with the wide search's engine (same windows); checks against candidates.csv when the period matches (synthetic: 141 strategies, 0 differ) |
 | Tests | `tests/test_pair_picker.py` 4 (floors, partial periods, out-of-sample floor, quarters file) |
+| `pair_picker.py --funnel` | Pairs left after each criterion in turn (distinct green / red signals), the worst-period distribution before each floor and which periods bind most often; printed automatically when no pair qualifies |
 
 # V4.9.15 (2026-11-24)
 
