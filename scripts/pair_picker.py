@@ -203,15 +203,18 @@ def main(argv=None):
               +f' | worst full quarter {100*bq[c].min():.1f}%, negative {int((bq[c]<0).sum())}/{int(c.sum())}')
     if a.loyo:
         print('\nleave-one-year-out: the same pick on the other years; the picked pairs in the held-out year (each pair, %)')
-        held=[];bheld=[]
+        held=[];bheld=[];stitch=np.full(len(per.train),np.nan)
         for y in per.years:
             k2,y2=ws.fold(per,y);P2=pick(G,B,VG,VB,okg,okb,per,k2,y2,a,a.top,F,held=y)
             hq=[q for q,p in enumerate(per.train) if p[:4]==y]
             if not P2:print(f'  {y}: no pair qualifies');continue
-            res=[[VG[i][q]+VB[j][q] for q in hq] for i,j,*_ in P2];held+=[x for r in res for x in r];bk=np.mean(res,0);bheld+=list(bk)
+            res=[[VG[i][q]+VB[j][q] for q in hq] for i,j,*_ in P2];held+=[x for r in res for x in r];bk=np.mean(res,0);bheld+=list(bk);stitch[hq]=bk
             print(f"  {y}: "+'  '.join('/'.join(f'{100*x:.0f}' for x in r) for r in res)+'   | basket '+'/'.join(f'{100*x:.0f}' for x in bk))
         if held:print(f'  held-out pair-halves: {len(held)}, negative {sum(x<0 for x in held)}, mean {100*np.mean(held):.1f}%, worst {100*min(held):.1f}%')
         if bheld:print(f'  held-out basket halves: {len(bheld)}, negative {sum(x<0 for x in bheld)}, mean {100*np.mean(bheld):.1f}%, worst {100*min(bheld):.1f}%')
+        if np.isfinite(stitch).all():
+            print(f'  held-out basket stitched (each year from the pick made without it): {100*stitch.sum()/yrs:.1f}%/yr pre-tax simple, '
+                  f'post-tax CAGR {100*float(ws.post_tax_cagr(stitch,per.train,keep,yrs,a.tax)):.1f}% (tax {a.tax:.0%}, loss carry-forward, compounded yearly)')
     print(f'-> {a.out}')
 
 if __name__=='__main__':main()
