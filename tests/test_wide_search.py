@@ -171,4 +171,26 @@ class CommandV4913(Fixture):
         self.assertIn('2 groups already done, 0 to scan',buf.getvalue())
 
 
+class CompositeV4913(unittest.TestCase):
+    """User objective (2026-11-24): spread, post-tax target and post-tax return terms."""
+    C=dict(tax=.35,target=.20,ramp_from=.15,range_floor=.05)
+    def test_post_tax_cagr_with_loss_set_off_by_hand(self):
+        lab=['2022H1','2022H2','2023H1','2023H2','2024H1','2024H2'];v=np.array([.3,-.1,-.4,.1,.5,0.]);k=np.ones(6,bool)
+        # 2022 +0.2 -> 0.13 after tax; 2023 -0.3 (carried forward); 2024 +0.5, 0.3 set off -> 0.5-0.35*0.2 = 0.43
+        self.assertAlmostEqual(float(ws.post_tax_cagr(v,lab,k,3.,.35)),(1.13*.7*1.43)**(1/3)-1,14)
+        self.assertAlmostEqual(float(ws.composite(v,lab,k,3.,self.C)),8*((1.13*.7*1.43)**(1/3)-1),14)          # below 15%: return term only
+        self.assertAlmostEqual(float(ws.composite(np.array([.2,.2]),lab[:2],np.ones(2,bool),1.,self.C)),.4/.05+2.8+8*.26,12)   # range 0 -> floor; 26% post-tax
+        self.assertAlmostEqual(float(ws.composite(np.array([.15,.1]),lab[:2],np.ones(2,bool),1.,self.C)),2.8*(.1625-.15)/.05+8*.1625,12)  # ramp, no spread term
+        self.assertEqual(float(ws.post_tax_cagr(np.array([-.7,-.6]),lab[:2],np.ones(2,bool),1.,.35)),-1.)
+    def test_vectorised_equals_scalar_and_fold_excludes_the_year(self):
+        rnd=np.random.default_rng(2);per=ws.Periods('2021-09-01','2026-01-01','2026-07-01','half');per.composite=self.C
+        V=rnd.normal(.12,.15,(40,len(per.train)))
+        for ex in (None,'2021','2023','2025'):
+            keep,yrs=ws.fold(per,ex);vec=ws.composite(V,per.train,keep,yrs,self.C)
+            self.assertEqual(yrs,max((dt.date.fromisoformat(per.mid)-dt.date.fromisoformat(per.lo)).days/365.25-(0 if ex is None else (~keep).sum()/2),1/365.25))
+            for i in range(len(V)):
+                self.assertEqual(vec[i],ws.objective(V[i],per,.35,ex))
+                if ex:self.assertEqual(ws.objective(V[i],per,.35,ex),ws.objective(np.where(keep,V[i],99.),per,.35,ex))   # the excluded year is ignored
+
+
 if __name__=='__main__':unittest.main()

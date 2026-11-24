@@ -46,7 +46,7 @@ from nifty_iv.core import cli
 _prange=zg._prange
 _jit=zg._nb.njit if zg.HAVE_NUMBA else (lambda f:f)
 _pjit=zg._nb.njit(parallel=True) if zg.HAVE_NUMBA else (lambda f:f)
-RANKS=('lcb','sharpe','worst')
+RANKS=('composite','lcb','sharpe','worst')
 
 # ------------------------------------------------------------------ periods
 def period_start(label):
@@ -76,8 +76,36 @@ def vec_stats(v,labels,lo,hi,kind,exclude=None):
     yrs=max(yrs,1/365.25);sd=float(stt.pstdev(keep)) if len(keep)>1 else 0.
     return dict(periods=len(keep),annual=float(sum(keep)/yrs),sd=sd,worst=float(min(keep)) if keep else 0.,negative=int(sum(x<0 for x in keep)))
 
+def post_tax_cagr(v,labels,keep,yrs,tax):
+    """Post-tax CAGR of period-return arrays (..., periods) on capital: each calendar year's net return (kept periods) taxed at
+    `tax` after setting off losses carried forward from earlier years, the after-tax yearly returns compounded over `yrs` years
+    (no interest, no reinvestment of FD income; -1 if the account is wiped out)."""
+    v=np.asarray(v,float);years=sorted({p[:4] for p,k in zip(labels,keep) if k})
+    cf=np.zeros(v.shape[:-1]);g=np.ones(v.shape[:-1])
+    for y in years:
+        m=np.array([k and p[:4]==y for p,k in zip(labels,keep)]);r=v[...,m].sum(-1)
+        used=np.where(r>0,np.minimum(cf,r),0.);cf=np.where(r<0,cf-r,cf-used);g=g*(1+r-tax*np.maximum(r-used,0.))
+    with np.errstate(invalid='ignore'):return np.where(g>0,np.power(np.maximum(g,1e-300),1/yrs)-1,-1.)
+
+def composite(v,labels,keep,yrs,c):
+    """User objective (2026-11-24): 0.4 / max(range of half-year returns, range_floor) counted only when post-tax CAGR > target,
+    + 0.4 x 7 x ramp(post-tax CAGR: 0 at ramp_from, 1 at target), + 0.2 x 40 x post-tax CAGR. Arrays (..., periods)."""
+    v=np.asarray(v,float);k=np.asarray(keep,bool);cg=post_tax_cagr(v,labels,k,yrs,c['tax'])
+    rng=(v[...,k].max(-1)-v[...,k].min(-1)) if k.any() else np.zeros(v.shape[:-1])
+    ramp=np.clip((cg-c['ramp_from'])/(c['target']-c['ramp_from']),0.,1.)
+    return .4/np.maximum(rng,c['range_floor'])*(cg>c['target'])+.4*7*ramp+.2*40*cg
+
+def fold(per,exclude=None):
+    """(kept-label mask, years) of the train periods without the excluded year, as vec_stats counts them."""
+    keep=np.array([not (exclude and p[:4]==exclude) for p in per.train])
+    yrs=max((dt.date.fromisoformat(per.mid)-dt.date.fromisoformat(per.lo)).days,1)/365.25
+    if exclude:yrs-=(~keep).sum()/(2 if per.kind=='half' else 4)
+    return keep,max(yrs,1/365.25)
+
 def objective(v,per,min_annual,exclude=None):
-    return ts.objective(vec_stats(v,per.train,per.lo,per.mid,per.kind,exclude),min_annual)
+    c=getattr(per,'composite',None)
+    if c is None:return ts.objective(vec_stats(v,per.train,per.lo,per.mid,per.kind,exclude),min_annual)
+    keep,yrs=fold(per,exclude);return float(composite(np.asarray(v,float),per.train,keep,yrs,c))
 
 # ------------------------------------------------------------------ exact engine (trade_structure.simulate + period_returns)
 @_jit
@@ -218,14 +246,14 @@ def scorings(per):
         out.append((y,keep,max(yrs,1/365.25)))
     return out
 
-def score(v,n,keep,yrs,rank,min_trades,min_annual,ppy,worst=None,max_loss=np.inf):
+def score(v,n,keep,yrs,rank,min_trades,min_annual,ppy,worst=None,max_loss=np.inf,labels=None,comp=None):
     """Screening score of single strategies (arrays (..., periods) of returns on capital at full size; -inf if too few trades or
     the yearly return is below min_annual or a trade's open loss exceeded max_loss). lcb: yearly return - one yearly standard
     deviation; sharpe: mean / sd; worst: the worst period."""
-    v=v[...,keep];annual=v.sum(-1)/yrs
+    V_=v;v=v[...,keep];annual=v.sum(-1)/yrs
     with np.errstate(divide='ignore',invalid='ignore'):
         sd=v.std(-1) if v.shape[-1] else annual*0;mean=v.mean(-1) if v.shape[-1] else annual*0
-        s=annual-sd*math.sqrt(ppy) if rank=='lcb' else np.where(sd>0,mean/sd,np.where(mean>0,1e6,-1e6))*math.sqrt(ppy) if rank=='sharpe' else v.min(-1)-1e-3*sd
+        s=composite(np.asarray(V_,float),labels,keep,yrs,comp) if rank=='composite' else annual-sd*math.sqrt(ppy) if rank=='lcb' else np.where(sd>0,mean/sd,np.where(mean>0,1e6,-1e6))*math.sqrt(ppy) if rank=='sharpe' else v.min(-1)-1e-3*sd
     ok=(n>=min_trades)&(annual>=min_annual)
     if worst is not None:ok&=worst>=-max_loss
     return np.where(ok,s,-np.inf)
@@ -314,7 +342,7 @@ def scan_group(g):
             for si,(y,keep,yrs) in enumerate(S_):
                 if y is None:v,nn,ww=tr,n,wt
                 else:j=per.years.index(y);v=ey.sum(-1)-ey[...,j];nn=n-ny[...,j];ww=np.delete(wy,j,-1).min(-1,initial=0.)
-                sc[si]=score(v,nn,keep,yrs,c['rank'],c['min_trades'],c['cand_min_annual'],ppy,ww,loss)
+                sc[si]=score(v,nn,keep,yrs,c['rank'],c['min_trades'],c['cand_min_annual'],ppy,ww,loss,per.train,c.get('comp'))
                 if nb is not None:sc[si]=robust(sc[si],nb)
             for si in range(NS):
                 cc,uu=np.nonzero(sc[si]>thr[si][:,None])
@@ -382,7 +410,7 @@ def build_account(cands,V,OCC,per,a,excl=None,log=None,name=str,WORST=None,EQ=No
         v,pick=trials(chosen,{c for c,_ in chosen})
         if pick is None or v<=cur+1e-12:break
         chosen.append(pick);cur=v;steps.append(dict(step=len(steps)+1,action='add',strategy=pick[0],weight=pick[1],objective=v))
-        if log:log(f'    + {name(pick[0])} x{pick[1]:g}: objective {100*v:.2f}')
+        if log:log(f'    + {name(pick[0])} x{pick[1]:g}: objective {v:.4f}')
     for rnd in range(a.rounds):                                                     # single replacements / resizes / removals
         improved=False
         for j in range(len(chosen)):
@@ -390,12 +418,12 @@ def build_account(cands,V,OCC,per,a,excl=None,log=None,name=str,WORST=None,EQ=No
             drop=obj(account_vec(rest,V)) if feasible(rest) else -np.inf
             if drop>cur+1e-12 and (pick is None or drop>=v):
                 chosen=rest;cur=drop;improved=True;steps.append(dict(step=len(steps)+1,action='drop',strategy=old[0],weight=old[1],objective=drop))
-                if log:log(f'    - {name(old[0])} x{old[1]:g}: objective {100*drop:.2f}')
+                if log:log(f'    - {name(old[0])} x{old[1]:g}: objective {drop:.4f}')
                 break
             if pick is not None and v>cur+1e-12:
                 chosen=rest+[pick];cur=v;improved=True
                 steps.append(dict(step=len(steps)+1,action='replace' if pick[0]!=old[0] else 'resize',strategy=pick[0],weight=pick[1],objective=v,replaced=old[0]))
-                if log:log(f'    ~ {name(old[0])} x{old[1]:g} -> {name(pick[0])} x{pick[1]:g}: objective {100*v:.2f}')
+                if log:log(f'    ~ {name(old[0])} x{old[1]:g} -> {name(pick[0])} x{pick[1]:g}: objective {v:.4f}')
                 break
         if not improved:break
     return chosen,cur,steps
@@ -445,7 +473,7 @@ def basket_search(items,K,per,a,excl=None,log=None,dmask=None):
                         if v>top[0]+1e-12:top=(v,trial)
                 if top[1] is None:break
                 best,bk[i]=top[0],top[1];improved=True
-            if log:log(f'    round {rnd+1}, {key_name(E.sd.key)} x{w:g}: {[E.sd.pairs[r] for r in bk[i]]} objective {100*best:.2f}')
+            if log:log(f'    round {rnd+1}, {key_name(E.sd.key)} x{w:g}: {[E.sd.pairs[r] for r in bk[i]]} objective {best:.4f}')
         if not improved:break
     return bk,best
 
@@ -464,10 +492,15 @@ def _signature(a,paths,scale,hol,gp):
     return dict(paths=str(Path(paths).resolve()),size=st.st_size,mtime_ns=st.st_mtime_ns,holidays=hashlib.sha256('|'.join(hol).encode()).hexdigest(),gap_policy=gp,
                 period=a.period,train_start=a.train_start,split=a.split,end=a.end,capital=a.capital,scale=scale,rank=a.rank,min_trades=a.min_trades,
                 cand_min_annual=a.cand_min_annual,per_config=a.per_config,compound=not a.no_compound,min_fill_rate=a.min_fill_rate,code=h.hexdigest(),
-                max_trade_loss=a.max_trade_loss,min_weight=min(a.weights),robust=a.robust)
+                max_trade_loss=a.max_trade_loss,min_weight=min(a.weights),robust=a.robust,comp=_comp(a))
 
-def _stats_line(v,labels,lo,hi,kind):
-    s=vec_stats(v,labels,lo,hi,kind);return f"{100*s['annual']:6.1f}%/yr  sd {100*s['sd']:5.1f}%  worst {100*s['worst']:6.1f}%  negative {s['negative']}/{s['periods']}"
+def _comp(a):
+    return dict(tax=a.tax,target=a.cagr_target,ramp_from=a.ramp_from,range_floor=a.range_floor) if a.objective=='composite' else None
+
+def _stats_line(v,labels,lo,hi,kind,tax=.35):
+    s=vec_stats(v,labels,lo,hi,kind);yrs=max((dt.date.fromisoformat(hi)-dt.date.fromisoformat(lo)).days,1)/365.25;v=np.asarray(v,float)
+    cg=float(post_tax_cagr(v,labels,np.ones(len(labels),bool),yrs,tax)) if len(v) else 0.;rg=float(v.max()-v.min()) if len(v) else 0.
+    return f"{100*s['annual']:6.1f}%/yr  post-tax CAGR {100*cg:5.1f}%  range {100*rg:5.1f}%  sd {100*s['sd']:5.1f}%  worst {100*s['worst']:6.1f}%  negative {s['negative']}/{s['periods']}"
 
 def main(argv=None):
     ap=cli.Parser(description=__doc__)
@@ -477,10 +510,14 @@ def main(argv=None):
     ap.add_argument('--min-fill-rate',type=float,default=zg.MIN_FILL_RATE,help='fill-rate gate per group (default %(default)s)')
     ap.add_argument('--capital',type=float,default=2.5e6,help='base of every return (default 25 lakh)')
     ap.add_argument('--scale',type=float,help="rupee multiplier (default 1 / the paths file's --target-fraction: full size)")
-    ap.add_argument('--train-start',default='2021-09-01',help='first entry day of the search period');ap.add_argument('--split',default='2025-01-01',help='entries before this day are searched on')
+    ap.add_argument('--train-start',default='2021-09-01',help='first entry day of the search period');ap.add_argument('--split',default='2026-01-01',help='entries before this day are searched on (user: 2025 included; default %(default)s)')
+    ap.add_argument('--objective',choices=('composite','floor'),default='composite',help="composite (user): 0.4/max(half-year range, --range-floor) if post-tax CAGR > --cagr-target, + 2.8 x ramp(CAGR, --ramp-from..--cagr-target), + 8 x post-tax CAGR; floor: worst period with --min-annual shortfall penalty (default %(default)s)")
+    ap.add_argument('--tax',type=float,default=.35,help='tax on each year\'s net gain after loss set-off (default %(default)s)')
+    ap.add_argument('--cagr-target',type=float,default=.20,help='post-tax CAGR target (default %(default)s)');ap.add_argument('--ramp-from',type=float,default=.15,help='post-tax CAGR at which the target term starts (default %(default)s)')
+    ap.add_argument('--range-floor',type=float,default=.05,help='smallest half-year range the spread term divides by (default %(default)s)')
     ap.add_argument('--end',default='2026-07-01',help='entries before this day; trades still open are valued to it')
     ap.add_argument('--period',choices=('half','quarter'),default='half',help='period of the objective and the screening scores')
-    ap.add_argument('--rank',choices=RANKS,default='lcb',help='stage-1 screening score: lcb = yearly return - one yearly sd of period returns (default); sharpe; worst = worst period')
+    ap.add_argument('--rank',choices=RANKS,default='composite',help='stage-1 screening score: composite = the --objective composite on the single strategy at full size (default); lcb = yearly return - one yearly sd; sharpe; worst = worst period')
     ap.add_argument('--min-trades',type=int,default=8,help='stage 1: train trades a candidate needs (default %(default)s)')
     ap.add_argument('--cand-min-annual',type=float,default=.08,help='stage 1: yearly train return a candidate needs at full size (default %(default)s)')
     ap.add_argument('--per-config',type=int,default=2,help='stage 1: best rules kept per configuration and scoring (default %(default)s)')
@@ -515,7 +552,9 @@ def main(argv=None):
     sig=_signature(a,a.paths,scale,hol,gp);configs=sorted({cf for cf,_ in signals})
     zg._CTX.clear();zg._CTX.update(paths=a.paths,bars=bars,signals=dict(signals),configs=configs,per=per,scale=scale,capital=a.capital,rank=a.rank,
         min_trades=a.min_trades,cand_min_annual=a.cand_min_annual,per_config=a.per_config,compound=not a.no_compound,min_fill_rate=a.min_fill_rate,
-        gap_policy=gp,workers=a.workers,mem=a.mem,robust=a.robust,max_trade_loss=a.max_trade_loss,min_weight=min(a.weights))
+        gap_policy=gp,workers=a.workers,mem=a.mem,robust=a.robust,max_trade_loss=a.max_trade_loss,min_weight=min(a.weights),comp=_comp(a))
+    if a.rank=='composite' and a.objective!='composite':sys.exit('--rank composite needs --objective composite')
+    per.composite=_comp(a)
     per.days=np.array(sorted({o for o in bars.ord if per.olo<=o<per.ohi}),np.int64);per.ntd=int((per.days<per.omid).sum())
     per.dyear=np.array([dt.date.fromordinal(int(o)).year for o in per.days])
     print(f'{len(groups)} groups, {len(configs)} configurations; train periods {per.train[0]}..{per.train[-1]} ({len(per.train)}), out of sample {per.oos[0] if per.oos else "-"}..{per.oos[-1] if per.oos else "-"}; '
@@ -576,7 +615,8 @@ def main(argv=None):
     OCC={i:EX[i]['occ'] for i in union}
     fold=lambda y:dict(WORST={i:EX[i]['worst'][y] for i in union},EQ={i:EX[i]['eq'][y] for i in union},dmask=dm[y])
     # ---- stage 2
-    print(f'\nstage 2: account on all train years (objective: worst {a.period}, yearly return >= {a.min_annual:.0%} of capital; sizes {a.weights}; peak exposure <= {a.max_exposure:g}; '
+    od=(f'0.4/max(range,{a.range_floor:g}) if post-tax CAGR > {a.cagr_target:.0%} + 2.8 x ramp({a.ramp_from:.0%}..{a.cagr_target:.0%}) + 8 x post-tax CAGR, tax {a.tax:.0%}' if per.composite else f'worst {a.period}, yearly return >= {a.min_annual:.0%} of capital')
+    print(f'\nstage 2: account on all train years (objective: {od}; sizes {a.weights}; peak exposure <= {a.max_exposure:g}; '
           f'trade loss x size <= {a.max_trade_loss:.1%}; account drawdown <= {a.max_dd:.0%})',flush=True)
     nm=lambda c:key_name(strategy_key(rows[c]))
     chosen,obj,steps=build_account(pools[0],{i:EX[i]['train'] for i in union},OCC,per,a,None,log=lambda m:print(m,flush=True),name=nm,**fold(None))
