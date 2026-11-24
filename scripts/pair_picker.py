@@ -10,6 +10,10 @@ in time, so both can use the whole capital). A pair qualifies when
   - pair post-tax CAGR (35% tax, loss carry-forward) >= --cagr-floor (default 0.20)
   - share of train half-years > 0 >= --min-positive             (default 0.85, i.e. 8 of 9)
   - half-year range (max - min) <= --range-cap                  (default 0.40)
+  - every train half-year > --min-half                           (default off)
+  - every train quarter > --min-quarter                          (default off; needs --quarters, made by scripts/strategy_periods.py)
+The floors skip a partial first period (2021H2 = Sep-Dec, 2021Q3 = Sep only) unless --floor-partial. --include-oos applies the
+floors to the out-of-sample periods too (2026H1, 2026Q1-Q2): then 2026H1 is no longer out of sample.
 Qualifying pairs are ranked all-positive first (unless --no-prefer-all-positive), then by --rank (objective: the wide search's
 composite with the same --cagr-floor and --range-cap; or cagr; or worst-half). Pairs are taken greedily: a pair is skipped if either
 leg repeats a leg already taken, judged by --distinct:
@@ -44,7 +48,24 @@ def key(r,how):
     return {'rule':(r['side'],r['structure'],r['level'],r['config'],r['profit'],r['stop']),'signal':(r['side'],r['structure'],r['level'],r['config']),
             'level':(r['side'],r['structure'],r['level'])}[how]
 
-def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top):
+def floor_cols(labels,a,held=None):
+    """Train periods a floor applies to: not the held-out year, not a partial first period (starting before --train-start) unless
+    --floor-partial."""
+    st=ws.dt.date.fromisoformat(a.train_start).toordinal()
+    return np.array([(held is None or p[:4]!=held) and (a.floor_partial or ws.period_start(p)>=st) for p in labels],bool)
+
+def floors_ok(gi,bi,F,a,held):
+    """(len(gi), len(bi)) mask: pairs above --min-half / --min-quarter on the floor periods."""
+    m=np.ones((len(gi),len(bi)),bool)
+    for x,f in ((a.min_half,F['half']),(a.min_quarter,F.get('quarter'))):
+        if x is None:continue
+        GT,BT,GO,BO,pt,po=f
+        c=floor_cols(pt,a,held)
+        if c.any():m&=(GT[gi][:,None,c]+BT[bi][None,:,c]).min(-1)>x
+        if a.include_oos and len(po):m&=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1)>x
+    return m
+
+def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
     """Greedy diverse pick on the halves in keep. Returns [(i, j, cagr, obj, positive share)]."""
     C=dict(tax=a.tax,target=a.cagr_floor,ramp_from=None,range_floor=a.range_floor,range_cap=a.range_cap)
     gi=np.flatnonzero(okg);bi=np.flatnonzero(okb)
@@ -53,6 +74,7 @@ def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top):
     cg=ws.post_tax_cagr(V,per.train,keep,yrs,a.tax);ob=ws.composite(V,per.train,keep,yrs,C)
     Vk=V[...,keep];pos=(Vk>0).mean(-1);rng=Vk.max(-1)-Vk.min(-1);wh=Vk.min(-1)
     m=(cg>=a.cagr_floor)&(pos>=a.min_positive-1e-9)&(rng<=a.range_cap)
+    if F is not None and (a.min_half is not None or a.min_quarter is not None):m&=floors_ok(gi,bi,F,a,held)
     if not m.any():return []
     sc={'objective':ob,'cagr':cg,'worst-half':wh}[a.rank]
     I,J=np.nonzero(m);tier=(pos[I,J]>=1-1e-9).astype(float) if a.prefer_all_positive else np.zeros(len(I))
@@ -76,6 +98,11 @@ def main(argv=None):
     ap.add_argument('--no-prefer-all-positive',dest='prefer_all_positive',action='store_false')
     ap.add_argument('--distinct',choices=('signal','level','rule'),default='signal');ap.add_argument('--top',type=int,default=5)
     ap.add_argument('--train-start',default='2021-09-01');ap.add_argument('--split',default='2026-01-01');ap.add_argument('--end',default='2026-07-01')
+    ap.add_argument('--min-half',type=float,default=None,help='every train half-year of the pair > this (e.g. 0.05; default off)')
+    ap.add_argument('--min-quarter',type=float,default=None,help='every train quarter of the pair > this (e.g. 0.05; default off; needs --quarters)')
+    ap.add_argument('--quarters',help='quarter returns per strategy, from scripts/strategy_periods.py --period quarter')
+    ap.add_argument('--floor-partial',action='store_true',help='apply the floors to a partial first period too')
+    ap.add_argument('--include-oos',action='store_true',help='apply the floors to the out-of-sample periods too (no out-of-sample test left)')
     ap.add_argument('--loyo',action='store_true',help='also run the pick with each year left out and show the held-out returns')
     a=ap.parse_args(argv)
     print('pair_picker '+' '.join(f'--{k.replace("_","-")} {v}' for k,v in vars(a).items()),flush=True)
@@ -85,8 +112,32 @@ def main(argv=None):
     VG,wg,dg,ng,og=arr(G,tr);VB,wb,db,nb,obb=arr(B,tr)
     okg=(wg>=-a.max_trade_loss)&(dg<=a.max_dd)&(ng>=a.min_trades);okb=(wb>=-a.max_trade_loss)&(db<=a.max_dd)&(nb>=a.min_trades)
     print(f'distinct strategies: green {len(G)} ({int(okg.sum())} within the per-leg limits), red {len(B)} ({int(okb.sum())})')
-    keep,yrs=ws.fold(per);P=pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,a.top)
-    if not P:sys.exit('no pair meets the criteria; relax --cagr-floor / --min-positive / --max-trade-loss / --max-dd')
+    oh=[k for k in G[0] if k.startswith('oos_20')] if G else []
+    F={'per_half':per,'half':(VG,VB,np.array([[float(r[k]) for k in oh] for r in G]).reshape(len(G),len(oh)),
+                                np.array([[float(r[k]) for k in oh] for r in B]).reshape(len(B),len(oh)),per.train,per.oos)}
+    if a.min_quarter is not None:
+        if not a.quarters:sys.exit('--min-quarter needs --quarters (scripts/strategy_periods.py --period quarter)')
+        Q=list(csv.DictReader(open(a.quarters)));pq=ws.Periods(a.train_start,a.split,a.end,'quarter')
+        if not Q or any(f'train_{p}' not in Q[0] for p in pq.train) or any(f'oos_{p}' not in Q[0] for p in pq.oos):
+            sys.exit(f'{a.quarters} lacks the quarters {pq.train + pq.oos}: make it with the same --train-start/--split/--end')
+        qi={ws.strategy_key(r):r for r in Q};miss=[0,0]
+        def qv(S,cols,side):
+            out=[]
+            for r in S:
+                q=qi.get(ws.strategy_key(r))
+                if q is None:miss[side]+=1;out.append([np.nan]*len(cols))      # no quarter figures: the leg cannot pass the floor
+                else:out.append([float(q[c]) for c in cols])
+            return np.array(out).reshape(len(S),len(cols))
+        tc=[f'train_{p}' for p in pq.train];oc=[f'oos_{p}' for p in pq.oos]
+        F['per_quarter']=pq;F['quarter']=(qv(G,tc,0),qv(B,tc,1),qv(G,oc,0),qv(B,oc,1),pq.train,pq.oos)
+        okg&=np.isfinite(F['quarter'][0]).all(1);okb&=np.isfinite(F['quarter'][1]).all(1)
+        if sum(miss):print(f'  no quarter figures for {miss[0]} green and {miss[1]} red strategies: left out')
+    fl=[f'every half > {a.min_half:.0%}' if a.min_half is not None else '',f'every quarter > {a.min_quarter:.0%}' if a.min_quarter is not None else '']
+    fl=' and '.join(x for x in fl if x)
+    if fl:print(f"floors: {fl} ({'incl. out-of-sample: 2026H1 is no longer a test' if a.include_oos else 'train only'}"
+                f"{'' if a.floor_partial else ', partial first period skipped'})")
+    keep,yrs=ws.fold(per);P=pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,a.top,F)
+    if not P:sys.exit('no pair meets the criteria; relax --cagr-floor / --min-positive / --min-half / --min-quarter / --max-trade-loss / --max-dd')
     nm=lambda r:f"{r['side']} {r['structure']} {int(float(r['level'])):+d} {r['config']} {r['profit']}/{r['stop']}"
     rows=[]
     print(f'\n{len(P)} pairs, distinct by {a.distinct}; halves {tr[0][6:]}..{tr[-1][6:]}, 2026H1 out of sample')
@@ -95,19 +146,24 @@ def main(argv=None):
         print(f"{n}. obj {ob:5.2f} | post-tax CAGR {100*cg:5.1f}% | positive {round(pos*len(tr))}/{len(tr)} | worst half {100*v.min():5.1f}% range {100*(v.max()-v.min()):4.1f}% | 2026H1 {100*o:6.1f}%")
         print(f"   G {nm(G[i])}  [worst trade {100*wg[i]:.1f}%, train DD {100*dg[i]:.1f}%, {int(ng[i])} trades]")
         print(f"   R {nm(B[j])}  [worst trade {100*wb[j]:.1f}%, train DD {100*db[j]:.1f}%, {int(nb[j])} trades]")
-        print('   halves '+' '.join(f'{100*x:.0f}' for x in v))
+        print('   halves '+' '.join(f'{100*x:.0f}' for x in v)+f' | {oh[0][4:] if oh else ""} '+' '.join(f'{100*(F["half"][2][i][q]+F["half"][3][j][q]):.0f}' for q in range(len(oh))))
+        if 'quarter' in F:
+            GT,BT,GO,BO,pt,po=F['quarter'];print('   quarters '+' '.join(f'{100*x:.0f}' for x in GT[i]+BT[j])+' | oos '+' '.join(f'{100*x:.0f}' for x in GO[i]+BO[j]))
         row=dict(rank=n,objective=round(ob,4),post_tax_cagr=round(cg,4),positive_halves=round(pos*len(tr)),worst_half=round(float(v.min()),4),
                  range=round(float(v.max()-v.min()),4),oos_2026H1=round(float(o),4))
         for s,r,w,d,t in (('green',G[i],wg[i],dg[i],ng[i]),('red',B[j],wb[j],db[j],nb[j])):
             row.update({f'{s}_{k}':r[k] for k in ('structure','level','config','profit','stop')});row.update({f'{s}_worst_trade':w,f'{s}_train_max_dd':d,f'{s}_trades':int(t)})
-        row.update({h:round(float(x),4) for h,x in zip(tr,v)});rows.append(row)
+        row.update({h:round(float(x),4) for h,x in zip(tr,v)})
+        if 'quarter' in F:
+            GT,BT,GO,BO,pt,po=F['quarter'];row.update({f'train_{p}':round(float(x),4) for p,x in zip(pt,GT[i]+BT[j])});row.update({f'oos_{p}':round(float(x),4) for p,x in zip(po,GO[i]+BO[j])})
+        rows.append(row)
     with open(a.out,'w',newline='') as fh:
         w=csv.DictWriter(fh,list(rows[0]));w.writeheader();w.writerows(rows)
     if a.loyo:
         print('\nleave-one-year-out: the same pick on the other years; the picked pairs in the held-out year (each pair, %)')
         held=[]
         for y in per.years:
-            k2,y2=ws.fold(per,y);P2=pick(G,B,VG,VB,okg,okb,per,k2,y2,a,a.top)
+            k2,y2=ws.fold(per,y);P2=pick(G,B,VG,VB,okg,okb,per,k2,y2,a,a.top,F,held=y)
             hq=[q for q,p in enumerate(per.train) if p[:4]==y]
             if not P2:print(f'  {y}: no pair qualifies');continue
             res=[[VG[i][q]+VB[j][q] for q in hq] for i,j,*_ in P2];held+=[x for r in res for x in r]

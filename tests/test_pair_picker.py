@@ -32,4 +32,32 @@ class PairPicker(unittest.TestCase):
         self.assertEqual(len(self.run_pick(rows,'--range-cap','1')),1)
         with self.assertRaises(SystemExit):self.run_pick(rows,'--range-cap','1','--min-positive','1')
 
+    def write(self,rows,name):
+        d=tempfile.mkdtemp();c=os.path.join(d,name)
+        with open(c,'w',newline='') as fh:
+            w=csv.DictWriter(fh,list(rows[0]));w.writeheader();w.writerows(rows)
+        return c
+    def test_half_floor_partial_and_oos(self):
+        rows=[row('bull','A','s',[.0]+[.3]*8,oos=.01),row('bull','B','s',[.25]*9,oos=.2),row('bear','X','s',[.0]*9)]
+        self.assertEqual(self.run_pick(rows,'--min-half','.26')[0]['green_config'],'A')   # partial 2021H2 skipped; B below .26
+        with self.assertRaises(SystemExit):self.run_pick(rows,'--min-half','.26','--floor-partial')  # A's 2021H2 = 0 counts now
+        self.assertEqual(self.run_pick(rows,'--min-half','.05','--floor-partial')[0]['green_config'],'B')
+        with self.assertRaises(SystemExit):self.run_pick(rows,'--min-half','.26','--include-oos')    # A's 2026H1 1% fails
+    def test_quarter_floor(self):
+        Q=['2021Q3','2021Q4']+[f'{y}Q{q}' for y in range(2022,2026) for q in range(1,5)]
+        def qrow(r,qv,oq=(.05,.05)):
+            d={k:r[k] for k in ('side','structure','level','config','profit','stop')};d['trades']=r['trades']
+            d.update({f'train_{p}':x for p,x in zip(Q,qv)});d.update({'oos_2026Q1':oq[0],'oos_2026Q2':oq[1]});return d
+        A=row('bull','A','s',[.3]*9);Bb=row('bull','B','s',[.2]*9);X=row('bear','X','s',[.0]*9)
+        rows=[A,Bb,X]
+        qa=[.15]*18;qa[5]=.01                                                   # A has one weak quarter (2022Q4)
+        qf=self.write([qrow(A,qa),qrow(Bb,[.1]*18),qrow(X,[0.]*18)],'q.csv')
+        self.assertEqual(self.run_pick(rows)[0]['green_config'],'A')
+        P=self.run_pick(rows,'--min-quarter','.05','--quarters',qf)
+        self.assertEqual(P[0]['green_config'],'B');self.assertIn('train_2022Q4',P[0])
+        qp=list(qa);qp[5]=.15;qp[0]=-.5                                         # weak only in the partial 2021Q3: skipped by default
+        qf2=self.write([qrow(A,qp),qrow(Bb,[.1]*18),qrow(X,[0.]*18)],'q2.csv')
+        self.assertEqual(self.run_pick(rows,'--min-quarter','.05','--quarters',qf2)[0]['green_config'],'A')
+        with self.assertRaises(SystemExit):self.run_pick(rows,'--min-quarter','.05')              # needs --quarters
+
 if __name__=='__main__':unittest.main()
