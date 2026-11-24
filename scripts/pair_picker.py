@@ -57,13 +57,15 @@ def floor_cols(labels,a,held=None):
 def floors_ok(gi,bi,F,a,held):
     """(len(gi), len(bi)) mask: pairs above --min-half / --min-quarter on the floor periods."""
     m=np.ones((len(gi),len(bi)),bool)
-    for x,f in ((a.min_half,F['half']),(a.min_quarter,F.get('quarter'))):
-        if x is None:continue
-        GT,BT,GO,BO,pt,po=f
+    for name,x in (('half',a.min_half),('quarter',a.min_quarter)):
+        if x is None or name not in F:continue
+        GT,BT,GO,BO,pt,po=F[name]
         c=floor_cols(pt,a,held)
         if c.any():m&=(GT[gi][:,None,c]+BT[bi][None,:,c]).min(-1)>x
-        if a.include_oos and len(po):m&=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1)>x
+        if oos_on(a,name) and len(po):m&=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1)>x
     return m
+
+def oos_on(a,name):return a.include_oos in ('both',name)
 
 def funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F):
     """Pairs left after each criterion in turn, and where the period floors bind."""
@@ -89,7 +91,7 @@ def funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F):
                   +', '.join(f'> {100*t:g}%: {int((vals>t).sum())}' for t in (0,.02,.03,.05)))
             cnt=np.bincount(arg,minlength=len(lab));top=np.argsort(-cnt)[:5]
             print(f'      {"halves" if name=="half" else "quarters"} that are most often the worst: '+', '.join(f'{lab[k]} {100*cnt[k]/len(arg):.0f}%' for k in top))
-        if a.include_oos and len(po):
+        if oos_on(a,name) and len(po):
             O=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1);sel=m.copy();m&=O>x;print(f'  {"every out-of-sample "+name+" > "+f"{100*x:g}%":40s} {dist(m)}')
             if sel.any():print(f'      before this floor: worst out-of-sample {name}: median {100*np.median(O[sel]):.1f}%, best {100*O[sel].max():.1f}%')
 
@@ -130,7 +132,8 @@ def main(argv=None):
     ap.add_argument('--min-quarter',type=float,default=None,help='every train quarter of the pair > this (e.g. 0.05; default off; needs --quarters)')
     ap.add_argument('--quarters',help='quarter returns per strategy, from scripts/strategy_periods.py --period quarter')
     ap.add_argument('--floor-partial',action='store_true',help='apply the floors to a partial first period too')
-    ap.add_argument('--include-oos',action='store_true',help='apply the floors to the out-of-sample periods too (no out-of-sample test left)')
+    ap.add_argument('--include-oos',nargs='?',const='both',choices=('both','half','quarter'),default=None,
+                    help='apply the floors to the out-of-sample periods too: both (bare flag), only the half floor (2026H1), or only the quarter floor (2026Q1-Q2); no out-of-sample test left')
     ap.add_argument('--funnel',action='store_true',help='print the pairs left after each criterion (always printed when none qualifies)')
     ap.add_argument('--loyo',action='store_true',help='also run the pick with each year left out and show the held-out returns')
     a=ap.parse_args(argv)
@@ -163,7 +166,7 @@ def main(argv=None):
         if sum(miss):print(f'  no quarter figures for {miss[0]} green and {miss[1]} red strategies: left out')
     fl=[f'every half > {100*a.min_half:g}%' if a.min_half is not None else '',f'every quarter > {100*a.min_quarter:g}%' if a.min_quarter is not None else '']
     fl=' and '.join(x for x in fl if x)
-    if fl:print(f"floors: {fl} ({'incl. out-of-sample: 2026H1 is no longer a test' if a.include_oos else 'train only'}"
+    if fl:print(f"floors: {fl} ({'out-of-sample included for the '+a.include_oos+' floor'+('s' if a.include_oos=='both' else '')+': 2026H1 is no longer a test' if a.include_oos else 'train only'}"
                 f"{'' if a.floor_partial else ', partial first period skipped'})")
     keep,yrs=ws.fold(per);P=pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,a.top,F)
     if a.funnel or not P:funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F)

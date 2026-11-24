@@ -43,6 +43,8 @@ class PairPicker(unittest.TestCase):
         with self.assertRaises(SystemExit):self.run_pick(rows,'--min-half','.26','--floor-partial')  # A's 2021H2 = 0 counts now
         self.assertEqual(self.run_pick(rows,'--min-half','.05','--floor-partial')[0]['green_config'],'B')
         with self.assertRaises(SystemExit):self.run_pick(rows,'--min-half','.26','--include-oos')    # A's 2026H1 1% fails
+        with self.assertRaises(SystemExit):self.run_pick(rows,'--min-half','.26','--include-oos','half')
+        self.assertEqual(self.run_pick(rows,'--min-half','.26','--include-oos','quarter')[0]['green_config'],'A')   # no quarter floor set
     def test_quarter_floor(self):
         Q=['2021Q3','2021Q4']+[f'{y}Q{q}' for y in range(2022,2026) for q in range(1,5)]
         def qrow(r,qv,oq=(.05,.05)):
@@ -59,5 +61,8 @@ class PairPicker(unittest.TestCase):
         qf2=self.write([qrow(A,qp),qrow(Bb,[.1]*18),qrow(X,[0.]*18)],'q2.csv')
         self.assertEqual(self.run_pick(rows,'--min-quarter','.05','--quarters',qf2)[0]['green_config'],'A')
         with self.assertRaises(SystemExit):self.run_pick(rows,'--min-quarter','.05')              # needs --quarters
+        qo=self.write([qrow(A,[.15]*18,(-.1,.2)),qrow(Bb,[.1]*18),qrow(X,[0.]*18)],'q3.csv')     # A: 2026Q1 -10%
+        self.assertEqual(self.run_pick(rows,'--min-quarter','.05','--quarters',qo,'--include-oos','half')[0]['green_config'],'A')
+        self.assertEqual(self.run_pick(rows,'--min-quarter','.05','--quarters',qo,'--include-oos','quarter')[0]['green_config'],'B')
 
 if __name__=='__main__':unittest.main()
