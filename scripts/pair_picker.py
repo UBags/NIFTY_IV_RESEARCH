@@ -193,7 +193,7 @@ def main(argv=None):
         wgf,egf,hg=rk(G);wbf,ebf,hb=rk(B)
         if (~hg).sum() or (~hb).sum():print(f'  no risk figures for {int((~hg).sum())} green and {int((~hb).sum())} red strategies: left out')
         okg&=hg;okb&=hb;F['risk']=dict(wg=wgf,wb=wbf,eg=egf,eb=ebf,years=yrs_r)
-        print('ranking: v4 = 10/max(full-year range,.10) -50[>.40] -40[half range>.30] -40 n 2^(n-1) (n negative halves) -10 m 2^(m-1) (m negative quarters) '
+        print('ranking: v4 = 10/max(full-year range,.10) -50[>.40] -40[half range>.30] -50 n 2^n (n negative halves) -10 m 2^(m-1) (m negative quarters) '
               '+15 at CAGR .25/.30/.35 +100 x (C-.20, C-.25, C-.30, C-.35) - drawdown steps (.075..25) - trade-loss steps (.03..095); '
               'C = post-tax CAGR without the best full year, capped at 50%')
     fl=[f'every half > {100*a.min_half:g}%' if a.min_half is not None else '',f'every quarter > {100*a.min_quarter:g}%' if a.min_quarter is not None else '']

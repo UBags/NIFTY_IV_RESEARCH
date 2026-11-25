@@ -112,6 +112,11 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.21: v4 score, third version (user, 2026-11-25)
+
+Negative train half-years now cost 50 n 2^n (1: 100, 2: 400, 3: 1200; was 40 n 2^(n-1)); everything else as V4.9.20
+(`wide_search.V4`: neg_half 50, neg_half_off 0; `count_penalty(n, w, g, off)` = w n g^(n - off)).
+
 ## V4.9.20: v4 score, second version (user, 2026-11-25)
 
 `wide_search.V4` / `score_v4` (and `pair_picker --rank v4`) now:

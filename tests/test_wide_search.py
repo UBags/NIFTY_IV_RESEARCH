@@ -249,8 +249,10 @@ class ScoreV4919(unittest.TestCase):
         H=[.2]*9;Q=[.1]*18;Q[3]=-.01
         r=self.s(H,Q);self.assertEqual(r['neg_quarters'],1);self.assertAlmostEqual(r['stability'],100-10)   # range 0 -> floor .10
         r=self.s([.2]*8+[-.01]);self.assertEqual(r['neg_halves'],1)
+        self.assertEqual([float(ws.count_penalty(n,50.,2.,0.)) for n in range(4)],[0.,100.,400.,1200.])   # halves: 50 n 2^n
+        self.assertEqual([float(ws.count_penalty(n,10.,2.,1.)) for n in range(4)],[0.,10.,40.,120.])     # quarters: 10 m 2^(m-1)
         two=self.s([.2]*6+[-.01,.2,-.01]);   # 2024H2 and 2025H2: same full-year and half ranges as one negative
-        self.assertEqual(two['neg_halves'],2);self.assertAlmostEqual(r['stability']-two['stability'],160-40)  # 40 x 2 x 2 vs 40
+        self.assertEqual(two['neg_halves'],2);self.assertAlmostEqual(r['stability']-two['stability'],400-100)  # 50 x 2 x 4 vs 50 x 1 x 2
         Q3=[.1]*18;Q3[3]=Q3[7]=Q3[11]=-.01;self.assertAlmostEqual(self.s(H,Q3)['stability'],100-10*3*4)                                      # 3 quarters: 120
         self.assertEqual(self.s(H,mdd=.26)['risk'],10+10+15+15+20+30+40+50);self.assertEqual(self.s(H,mdd=.21)['risk'],10+10+15+15+20+30)
         big=self.s([2.]*9);self.assertGreater(big['cagr_ex_best'],.5);self.assertAlmostEqual(big['return_'],45+100*(4*.5-1.1))

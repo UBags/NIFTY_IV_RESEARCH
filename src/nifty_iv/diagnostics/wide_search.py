@@ -117,18 +117,19 @@ def composite(v,labels,keep,yrs,c):
     ramp=hit*1. if c.get('ramp_from') is None else np.clip((cg-c['ramp_from'])/(c['target']-c['ramp_from']),0.,1.)
     return .4/np.maximum(rng,c['range_floor'])*hit+.4*7*ramp+.2*40*cg-2.8*(rng>c.get('range_cap',np.inf))
 
-# ------------------------------------------------------------------ V4.9.19 score (user, 2026-11-25; second version V4.9.20)
+# ------------------------------------------------------------------ V4.9.19 score (user, 2026-11-25; second version V4.9.20, third V4.9.21)
 V4=dict(range_coef=10.,range_floor=.10,                                  # 10 / max(range of full-year returns, 0.10)
         fy_cap=.40,fy_pen=50.,hy_cap=.30,hy_pen=40.,                     # - 50 if that range > 0.40, - 40 if the half-year range > 0.30
-        neg_half=40.,neg_quarter=10.,neg_growth=2.,                      # - 40 n 2^(n-1) for n negative half-years, - 10 m 2^(m-1) for m negative quarters
+        neg_half=50.,neg_half_off=0.,neg_quarter=10.,neg_quarter_off=1.,neg_growth=2.,   # - 50 n 2^n for n negative half-years (V4.9.21), - 10 m 2^(m-1) for m negative quarters
         steps=((.25,15.),(.30,15.),(.35,15.)),                           # + 15 at each CAGR step
         slopes=(.20,.25,.30,.35),slope=100.,cagr_cap=.50,                # + 100 x (CAGR - t) for each t, CAGR capped at 0.50
         dd=((.075,10.),(.10,10.),(.125,15.),(.15,15.),(.175,20.),(.20,30.),(.225,40.),(.25,50.)),   # - each weight whose drawdown step is exceeded
         tl=((.03,3.),(.05,6.),(.065,9.),(.08,20.),(.095,30.)))           # - each weight whose worst-trade-loss step is exceeded
 
-def count_penalty(n,w,g):
-    """w x n x g^(n - 1): 0 for n = 0, w, 2 x 2w, 3 x 4w, ... for g = 2 (each further negative period costs more)."""
-    n=np.asarray(n,float);return np.where(n>0,w*n*np.power(g,np.maximum(n-1,0.)),0.)
+def count_penalty(n,w,g,off=1.):
+    """w x n x g^(n - off), 0 for n = 0. off 1: w, 2 x 2w, 3 x 4w, ...; off 0: 2w, 2 x 4w, 3 x 8w, ... (g = 2; each further negative
+    period costs more)."""
+    n=np.asarray(n,float);return np.where(n>0,w*n*np.power(g,n-off),0.)
 
 def full_years(per,exclude=None):
     """Complete calendar years of the train window (1 Jan to 31 Dec inside [lo, mid)), without the excluded year."""
@@ -150,7 +151,7 @@ def score_v4(H,Q,ph,pq,mdd,tl,tax,exclude=None,c=V4):
     (..., len(pq.train)); mdd: train account drawdown, tl: worst open trade loss (both positive shares of capital, (...)); exclude: a
     held-out train year (left out of every term; mdd and tl must then be the ones without that year's trades). Returns pre-tax
     shares of capital throughout except CAGR (post-tax, `tax`, loss carry-forward), as a dict of the score and its parts:
-      score = 10/max(Rfy, .10) - 50[Rfy > .40] - 40[Rhy > .30] - 40 n 2^(n-1) - 10 m 2^(m-1)    (n, m = negative halves, quarters)
+      score = 10/max(Rfy, .10) - 50[Rfy > .40] - 40[Rhy > .30] - 50 n 2^n - 10 m 2^(m-1)    (n, m = negative halves, quarters)
               + 15([C > .25] + [C > .30] + [C > .35]) + 100 x sum over t in (.20, .25, .30, .35) of (C - t)
               - (10[MDD > .075] + 10[MDD > .10] + 15[MDD > .125] + 15[MDD > .15] + 20[MDD > .175] + 30[MDD > .20] + 40[MDD > .225] + 50[MDD > .25])
               - (3[TL > .03] + 6[TL > .05] + 9[TL > .065] + 20[TL > .08] + 30[TL > .095])
@@ -161,7 +162,7 @@ def score_v4(H,Q,ph,pq,mdd,tl,tax,exclude=None,c=V4):
     if len(fy)<2:raise ValueError(f'the score needs at least 2 complete train years ({fy})')
     cx,FY=cagr_ex_best(H,ph.train,kh,yh,fy,tax);C=np.minimum(cx,c['cagr_cap'])
     rfy=FY.max(-1)-FY.min(-1);Hk=H[...,kh];rhy=Hk.max(-1)-Hk.min(-1);nh=(Hk<0).sum(-1);nq=(Q[...,kq]<0).sum(-1)
-    stab=c['range_coef']/np.maximum(rfy,c['range_floor'])-c['fy_pen']*(rfy>c['fy_cap'])-c['hy_pen']*(rhy>c['hy_cap'])-count_penalty(nh,c['neg_half'],c.get('neg_growth',1.))-count_penalty(nq,c['neg_quarter'],c.get('neg_growth',1.))
+    stab=c['range_coef']/np.maximum(rfy,c['range_floor'])-c['fy_pen']*(rfy>c['fy_cap'])-c['hy_pen']*(rhy>c['hy_cap'])-count_penalty(nh,c['neg_half'],c.get('neg_growth',1.),c.get('neg_half_off',1.))-count_penalty(nq,c['neg_quarter'],c.get('neg_growth',1.),c.get('neg_quarter_off',1.))
     ret=sum(w*(C>t) for t,w in c['steps'])+c['slope']*sum(C-t for t in c['slopes'])
     risk=sum(w*(mdd>t) for t,w in c['dd'])+sum(w*(tl>t) for t,w in c['tl'])
     return dict(score=stab+ret-risk,cagr_ex_best=cx,range_fy=rfy,range_hy=rhy,neg_halves=nh,neg_quarters=nq,stability=stab,return_=ret,risk=risk)
