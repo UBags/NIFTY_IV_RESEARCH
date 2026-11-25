@@ -239,7 +239,7 @@ def main(argv=None):
     ap.add_argument('--attribution',help='attribution_files.csv from scripts/attribute_2017_2020.py (required for options unless --no-attribution)')
     ap.add_argument('--no-attribution',action='store_true',help='load option files without leaving out copied file-days (not recommended)')
     ap.add_argument('--copy-share',type=float,default=.5,help='a file-day is a copy of the previous zip when this share of the common minutes have identical closes')
-    ap.add_argument('--min-common',type=int,default=5,help='common minutes needed before a file-day can be called a copy')
+    ap.add_argument('--min-common',type=int,default=1,help='common minutes needed before a file-day can be called a copy')
     ap.add_argument('--overrides',default=None,help='CSV zip,cp,strike,day_from,day_to,action,expiry,reason (action drop | expiry; * = any cp / strike)')
     ap.add_argument('--kinds',default='spot,future,option');ap.add_argument('--limit',type=int,default=0,help='load at most N units (a trial)')
     ap.add_argument('--dry-run',action='store_true',help='read, check and count everything; write nothing to PostgreSQL')

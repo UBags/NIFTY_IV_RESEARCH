@@ -2,3 +2,5 @@
 # zip = the option zip's month (YYYY-MM); cp CE / PE / *; strike a number or *; days inclusive; action drop | expiry
 # (expiry: store those rows under this expiry instead of the zip's). Fill from the attribute_2017_2020 findings.
 zip,cp,strike,day_from,day_to,action,expiry,reason
+2017-04,*,*,2017-03-14,2017-03-30,drop,,"April 2017 zip before the March expiry: 193 file-days are exact copies of the March contract and 93 more are partly identical (mixed within the day); the rest cannot be told apart reliably. April rows kept from 31 Mar (attribute_2017_2020, 25 Nov 2026)"
+2018-03,*,*,2017-12-28,2018-02-22,expiry,2018-02-22,"March 2018 zip holds the FEBRUARY contract up to its expiry: identical to the February zip on every comparable file-day 9 Jan-22 Feb, no shared minute with different prices, ATM straddle continuous 8->9 Jan (412.4 -> 412.6); not the missing January contract. Stored under 2018-02-22 where it is not a copy (28 Dec-8 Jan, and strikes the February zip lacks)"
