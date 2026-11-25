@@ -229,7 +229,7 @@ class SpeedV4917(Fixture):
         self.assertIn('kernel',res['phases'])
 
 class ScoreV4919(unittest.TestCase):
-    """User score (2026-11-25, V4.9.22 version): stability with weak-period floors, capped CAGR without the best full year, drawdown
+    """User score (2026-11-25, V4.9.23 version): stability with weak-period floors, capped CAGR without the best full year, drawdown
     and trade-loss steps, held-out year."""
     ph=ws.Periods('2021-09-01','2026-01-01','2026-07-01','half');pq=ws.Periods('2021-09-01','2026-01-01','2026-07-01','quarter')
     def s(self,H,Q=None,mdd=0.,tl=0.,exclude=None,**c):
@@ -245,26 +245,22 @@ class ScoreV4919(unittest.TestCase):
         self.assertAlmostEqual(r['range_fy'],.56);self.assertAlmostEqual(r['range_hy'],.28);self.assertEqual((r['weak_halves'],r['neg_halves']),(2,0))
         keep=np.array([p[:4]!='2022' for p in self.ph.train]);c=float(ws.post_tax_cagr(np.array(H),self.ph.train,keep,ws.fold(self.ph)[1]-1,.35))
         self.assertAlmostEqual(r['cagr_ex_best'],c)
-        self.assertAlmostEqual(r['stability'],12/.56-60-50*2);self.assertEqual(r['risk'],10+10+3+6+9+20)
+        self.assertAlmostEqual(r['stability'],12/.56-60-50*2**2-10*2**0);self.assertEqual(r['risk'],10+10+3+6+9+20)
         self.assertAlmostEqual(r['return_'],100*(4*c-1.1)+15*(c>.25)+15*(c>.30)+15*(c>.35))
         self.assertAlmostEqual(r['score'],r['stability']+r['return_']-r['risk'])
-    def test_weak_and_negative_counts(self):
-        self.assertEqual([float(ws.weak_penalty(w,n,50.,2.)) for w,n in ((0,0),(1,0),(2,0),(2,1),(3,2))],[0.,50.,100.,200.,600.])
-        base=[.2]*9
-        one=self.s([.2]*7+[.01,.2]);self.assertEqual((one['weak_halves'],one['neg_halves']),(1,0))
-        neg=self.s([.2]*7+[-.01,.2]);self.assertEqual((neg['weak_halves'],neg['neg_halves']),(1,1))
+    def test_weak_counts(self):
+        self.assertEqual([float(ws.weak_penalty(w,50.,2.)) for w in range(4)],[50.,100.,200.,400.])
         rng=lambda r:12/max(r['range_fy'],.1)-60*(r['range_fy']>.4)-50*(r['range_hy']>.3)
-        self.assertAlmostEqual(rng(one)-one['stability'],50);self.assertAlmostEqual(rng(neg)-neg['stability'],100)   # the weak half, now negative: 100 instead of 50
-        self.assertAlmostEqual(self.s(base,growth_by='weak')['stability'],self.s(base)['stability'])
-        two=self.s([.2]*6+[.01,.2,.01],growth_by='weak');self.assertAlmostEqual(rng(two)-two['stability'],50*2*4)       # growth by weak: 2 weak -> 50 x 2 x 2^2
-        self.assertAlmostEqual(rng(self.s([.2]*6+[.01,.2,.01]))-self.s([.2]*6+[.01,.2,.01])['stability'],50*2*1)           # default: no negative -> 50 x 2
-        Q=[.05]*18;Q[3]=.01;Q[7]=-.01                            # one weak, one negative quarter: 10 x 2 x 2^1
-        self.assertAlmostEqual(self.s(base)['stability']-self.s(base,Q)['stability'],40)
-        self.assertAlmostEqual(self.s(base,half_floor=.25)['stability'],12/.1-50*8)       # every full half below .25: 8 weak
+        base=self.s([.2]*9);self.assertAlmostEqual(base['stability'],120-50-10)          # no weak period: the constant 50 + 10
+        one=self.s([.2]*7+[.01,.2]);self.assertEqual((one['weak_halves'],one['neg_halves']),(1,0));self.assertAlmostEqual(rng(one)-one['stability'],100+10)
+        neg=self.s([.2]*7+[-.01,.2]);self.assertEqual((neg['weak_halves'],neg['neg_halves']),(1,1));self.assertAlmostEqual(rng(neg)-neg['stability'],100+10)  # sign does not matter
+        two=self.s([.2]*6+[.01,.2,.01]);self.assertAlmostEqual(rng(two)-two['stability'],200+10)
+        Q=[.05]*18;Q[3]=.01;Q[7]=-.01;self.assertAlmostEqual(base['stability']-self.s([.2]*9,Q)['stability'],40-10)   # 2 weak quarters: 10 x 4
+        self.assertAlmostEqual(self.s([.2]*9,half_floor=.25)['stability'],120-50*2**8-10)   # every full half below .25: 8 weak
         partial=[.01]+[.2]*8;self.assertEqual(self.s(partial)['weak_halves'],0);self.assertEqual(self.s(partial,count_partial=True)['weak_halves'],1)
-        Qp=[0.]+[.05]*17;self.assertEqual(self.s(base,Qp)['weak_quarters'],0)              # an empty partial 2021Q3 (Sep only) is not weak
+        Qp=[0.]+[.05]*17;self.assertEqual(self.s([.2]*9,Qp)['weak_quarters'],0)            # an empty partial 2021Q3 (Sep only) is not weak
     def test_floor_and_cap(self):
-        self.assertAlmostEqual(self.s([.2]*9)['stability'],120.)                          # range 0 -> floor .10
+        self.assertAlmostEqual(self.s([.2]*9)['stability'],120.-60)                      # range 0 -> floor .10; constant 50 + 10
         big=self.s([2.]*9);self.assertGreater(big['cagr_ex_best'],.5);self.assertAlmostEqual(big['return_'],45+100*(4*.5-1.1))
         self.assertEqual(self.s([.2]*9,mdd=.26)['risk'],10+10+15+15+20+30+40+50);self.assertEqual(self.s([.2]*9,mdd=.21)['risk'],10+10+15+15+20+30)
     def test_one_great_year_loses_its_credit(self):

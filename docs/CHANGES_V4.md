@@ -112,6 +112,12 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.23: v4 score, fifth version (user, 2026-11-25)
+
+Weak periods now cost 50 x 2^(halves < .05) and 10 x 2^(quarters < .025) (0 weak: 50 / 10, a constant that does not change the
+ranking; 1: 100 / 20; 2: 200 / 40; 3: 400 / 80); a weak period counts the same whether or not it is negative. `--v4-growth-by` is
+gone; the floors (`--v4-half-floor`, `--v4-quarter-floor`) and `--v4-count-partial` stay. Everything else as V4.9.22.
+
 ## V4.9.22: v4 score, fourth version (user, 2026-11-25)
 
     12/max(Rfy, .10) - 60[Rfy > .40] - 50[Rhy > .30]

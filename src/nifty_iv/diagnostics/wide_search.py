@@ -117,19 +117,19 @@ def composite(v,labels,keep,yrs,c):
     ramp=hit*1. if c.get('ramp_from') is None else np.clip((cg-c['ramp_from'])/(c['target']-c['ramp_from']),0.,1.)
     return .4/np.maximum(rng,c['range_floor'])*hit+.4*7*ramp+.2*40*cg-2.8*(rng>c.get('range_cap',np.inf))
 
-# ------------------------------------------------------------------ V4.9.19 score (user, 2026-11-25; versions 2-4: V4.9.20 - V4.9.22)
+# ------------------------------------------------------------------ V4.9.19 score (user, 2026-11-25; versions 2-5: V4.9.20 - V4.9.23)
 V4=dict(range_coef=12.,range_floor=.10,                                  # 12 / max(range of full-year returns, 0.10)
         fy_cap=.40,fy_pen=60.,hy_cap=.30,hy_pen=50.,                     # - 60 if that range > 0.40, - 50 if the half-year range > 0.30
-        half_floor=.05,weak_half=50.,quarter_floor=.025,weak_quarter=10.,  # - 50 x (halves < .05) x 2^(negative halves), - 10 x (quarters < .025) x 2^(negative quarters)
-        growth=2.,growth_by='negative',count_partial=False,              # growth_by 'weak': the exponent counts the weak periods instead; partial first periods not counted
+        half_floor=.05,weak_half=50.,quarter_floor=.025,weak_quarter=10.,  # - 50 x 2^(halves < .05), - 10 x 2^(quarters < .025)
+        growth=2.,count_partial=False,                                   # partial first periods (2021H2, 2021Q3) not counted
         steps=((.25,15.),(.30,15.),(.35,15.)),                           # + 15 at each CAGR step
         slopes=(.20,.25,.30,.35),slope=100.,cagr_cap=.50,                # + 100 x (CAGR - t) for each t, CAGR capped at 0.50
         dd=((.075,10.),(.10,10.),(.125,15.),(.15,15.),(.175,20.),(.20,30.),(.225,40.),(.25,50.)),   # - each weight whose drawdown step is exceeded
         tl=((.03,3.),(.05,6.),(.065,9.),(.08,20.),(.095,30.)))           # - each weight whose worst-trade-loss step is exceeded
 
-def weak_penalty(weak,neg,w,g):
-    """w x weak x g^neg: weak = periods below the floor, neg = negative periods (each negative one doubles the cost for g = 2)."""
-    weak=np.asarray(weak,float);return w*weak*np.power(g,np.asarray(neg,float))
+def weak_penalty(weak,w,g):
+    """w x g^weak, weak = periods below the floor: w with none (a constant, no effect on the ranking), each weak period doubles it (g = 2)."""
+    return w*np.power(g,np.asarray(weak,float))
 
 def full_periods(per):
     """Train periods that start on or after the train start (a partial first period, e.g. 2021H2 from 1 Sep, is not one)."""
@@ -151,19 +151,19 @@ def cagr_ex_best(H,labels,keep,yrs,fy,tax):
     return out,FY
 
 def score_v4(H,Q,ph,pq,mdd,tl,tax,exclude=None,c=V4):
-    """The user's score (V4.9.22 version) of strategies or pairs. H: train half-year returns (..., len(ph.train)); Q: train quarter
+    """The user's score (V4.9.23 version) of strategies or pairs. H: train half-year returns (..., len(ph.train)); Q: train quarter
     returns (..., len(pq.train)); mdd: train account drawdown, tl: worst open trade loss (both positive shares of capital, (...));
     exclude: a held-out train year (left out of every term; mdd and tl must then be the ones without that year's trades). Pre-tax
     shares of capital throughout except CAGR (post-tax, `tax`, loss carry-forward). Returns a dict of the score and its parts:
       score = 12/max(Rfy, .10) - 60[Rfy > .40] - 50[Rhy > .30]
-              - 50 x (halves < half_floor) x 2^(negative halves) - 10 x (quarters < quarter_floor) x 2^(negative quarters)
+              - 50 x 2^(halves < half_floor) - 10 x 2^(quarters < quarter_floor)
               + 15([C > .25] + [C > .30] + [C > .35]) + 100 x sum over t in (.20, .25, .30, .35) of (C - t)
               - (10[MDD > .075] + 10[MDD > .10] + 15[MDD > .125] + 15[MDD > .15] + 20[MDD > .175] + 30[MDD > .20] + 40[MDD > .225] + 50[MDD > .25])
               - (3[TL > .03] + 6[TL > .05] + 9[TL > .065] + 20[TL > .08] + 30[TL > .095])
     Rfy = range (max - min) of the complete train years' returns; Rhy = range of the kept half-years (a partial first half included,
     as the composite); C = min(post-tax CAGR with the best complete year also left out, .50). Weak and negative periods are counted
-    on full train periods only (not a partial first half / quarter) unless c['count_partial']; c['growth_by'] = 'weak' makes the
-    exponent the number of weak periods instead of negative ones. half_floor (.05) and quarter_floor (.025) are in c."""
+    on full train periods only (not a partial first half / quarter) unless c['count_partial']. half_floor (.05) and quarter_floor
+    (.025) are in c."""
     H=np.asarray(H,float);Q=np.asarray(Q,float);mdd=np.asarray(mdd,float);tl=np.asarray(tl,float)
     kh,yh=fold(ph,exclude);kq,_=fold(pq,exclude);fy=full_years(ph,exclude)
     if len(fy)<2:raise ValueError(f'the score needs at least 2 complete train years ({fy})')
@@ -172,9 +172,8 @@ def score_v4(H,Q,ph,pq,mdd,tl,tax,exclude=None,c=V4):
     ch=kh if c.get('count_partial') else kh&full_periods(ph);cq=kq if c.get('count_partial') else kq&full_periods(pq)
     Hc=H[...,ch];Qc=Q[...,cq]
     wh=(Hc<c['half_floor']).sum(-1);nh=(Hc<0).sum(-1);wq=(Qc<c['quarter_floor']).sum(-1);nq=(Qc<0).sum(-1)
-    eh,eq=(wh,wq) if c.get('growth_by')=='weak' else (nh,nq)
     stab=(c['range_coef']/np.maximum(rfy,c['range_floor'])-c['fy_pen']*(rfy>c['fy_cap'])-c['hy_pen']*(rhy>c['hy_cap'])
-          -weak_penalty(wh,eh,c['weak_half'],c['growth'])-weak_penalty(wq,eq,c['weak_quarter'],c['growth']))
+          -weak_penalty(wh,c['weak_half'],c['growth'])-weak_penalty(wq,c['weak_quarter'],c['growth']))
     ret=sum(w*(C>t) for t,w in c['steps'])+c['slope']*sum(C-t for t in c['slopes'])
     risk=sum(w*(mdd>t) for t,w in c['dd'])+sum(w*(tl>t) for t,w in c['tl'])
     return dict(score=stab+ret-risk,cagr_ex_best=cx,range_fy=rfy,range_hy=rhy,weak_halves=wh,neg_halves=nh,weak_quarters=wq,neg_quarters=nq,
