@@ -112,6 +112,16 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.24: scripts/pair_screen.py, pairs by screening and ratio ranking (user, 2026-11-25)
+
+Instead of one ranking formula: (a) strategies with post-tax CAGR < 10% out (and < 15 train trades, a sanity floor); (b, c) each side
+ranked by (Sharpe + Sortino + Calmar) / 3; (d) the top 1000 of each side paired; pairs out when (e) post-tax CAGR < 25%, (f) worst
+full train half < 2.5%, (g) drawdown > 20%, (h) worst trade > 10%, (i) complete-year range > 40%; (j) the rest ranked by
+(Sortino + Calmar) / 2, top 5 taken with no signal setup repeated. Ratios from daily mark-to-market P&L on fixed capital
+(`scripts/strategy_risk.py` npz): Sharpe and Sortino annualised with sqrt(252), Calmar = mean daily P&L x 252 / max(drawdown, 1%), no
+risk-free rate. Every threshold is an option. `--loyo` repeats the whole screen with each year left out (that year's trades and days
+removed from the ratios, drawdowns and worst trades). Tests: `tests/test_pair_screen.py`.
+
 ## V4.9.23: v4 score, fifth version (user, 2026-11-25)
 
 Weak periods now cost 50 x 2^(halves < .05) and 10 x 2^(quarters < .025) (0 weak: 50 / 10, a constant that does not change the
