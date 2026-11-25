@@ -14,14 +14,20 @@ Steps (every figure on train data only, shares of --capital, both legs of a pair
   g. pairs whose train drawdown > --max-dd (0.20) are dropped
   h. pairs whose worst open trade loss > --max-trade-loss (0.10) are dropped
   i. pairs whose range of complete-year returns (2022-2025, best - worst) > --max-fy-range (0.40) are dropped
-  j. the rest are ranked by (Sortino + Calmar) / 2; the best --top are taken greedily with no signal setup repeated on either
+  j. if more than --narrow-above (100) pairs are left, those whose complete-year range > --max-fy-range2 (0.30) are dropped too
+  k. pairs whose worst leave-one-year-out post-tax CAGR (the CAGR over the other train years, each year 2021-2025 dropped in turn)
+     < --min-loyo-cagr (0.20) are dropped: a pair that needs one great year fails
+  l. pairs whose worst full train half-year < --min-half2 (0.10) are dropped (2021H2 not judged unless --floor-partial)
+  m. the rest are ranked by (Sortino + Calmar) / 2; the best --top are taken greedily with no signal setup repeated on either
      side (--distinct, as scripts/pair_picker.py)
+Every step uses all train years (V4.9.25, user: held-out only where a step asks for it; step k is the one that does).
 Ratios come from daily mark-to-market P&L on fixed capital (scripts/strategy_risk.py): r = daily change of equity / capital;
 Sharpe = mean(r) / sd(r) x sqrt(252); Sortino = mean(r) / sqrt(mean(min(r, 0)^2)) x sqrt(252); Calmar = mean(r) x 252 / max(MDD,
 0.01); no risk-free rate; days with no position count as 0. A pair's daily P&L is the sum of its legs' (they never overlap).
 Post-tax CAGR: 35% tax on each year's net gain after loss carry-forward, compounded yearly (wide_search.post_tax_cagr).
---loyo repeats the whole screen with each train year left out (ratios, drawdowns and worst trades without that year's trades or
-days) and shows the picked pairs in the held-out year, as pair_picker does."""
+--loyo (a report only, it filters nothing): the whole screen is repeated with each train year hidden (ratios, drawdowns and worst
+trades without that year's trades or days) and the pairs it picks are shown in the hidden year, as pair_picker does, so the result
+compares with the earlier methods on unseen years."""
 import argparse,csv,os,sys
 import datetime as dt
 import numpy as np
@@ -73,6 +79,16 @@ def screen(G,B,VG,VB,ng,nb,R,per,fold,a,log=False):
     tl=np.maximum(Lg['W'][gi[I]],Lb['W'][bi[J]]);keep&=tl<=a.max_trade_loss;fun.append((f'worst trade <= {a.max_trade_loss:.1%}',int(keep.sum())))
     FY=np.stack([V[I,J][:,mk].sum(-1) for mk in fold.fymask],-1);rfy=FY.max(-1)-FY.min(-1);keep&=rfy<=a.max_fy_range
     fun.append((f'full-year range <= {a.max_fy_range:.0%}',int(keep.sum())))
+    if keep.sum()>a.narrow_above:keep&=rfy<=a.max_fy_range2;fun.append((f'more than {a.narrow_above}: full-year range <= {a.max_fy_range2:.0%}',int(keep.sum())))
+    else:fun.append((f'{int(keep.sum())} <= {a.narrow_above}: no second range cut',int(keep.sum())))
+    lx=np.full(len(I),np.inf);ly=np.array(['']*len(I),object);s_=np.flatnonzero(keep)
+    if len(s_):
+        Vs=V[I[s_],J[s_]];lab=np.array([p[:4] for p in per.train])
+        for y in sorted({p[:4] for p,k in zip(per.train,fold.keep) if k}):            # k: each train year dropped in turn
+            ky=fold.keep&(lab!=y);yy=max(fold.yrs-(fold.keep&(lab==y)).sum()/2,1/365.25)         # years as wide_search.fold counts them
+            cy=ws.post_tax_cagr(Vs,per.train,ky,yy,a.tax);w=cy<lx[s_];lx[s_[w]]=cy[w];ly[s_[w]]=y
+    keep&=lx>=a.min_loyo_cagr;fun.append((f'worst leave-one-year-out CAGR >= {a.min_loyo_cagr:.0%}',int(keep.sum())))
+    keep&=wh[I,J]>=a.min_half2;fun.append((f'worst half >= {a.min_half2:.0%}',int(keep.sum())))
     sel=np.flatnonzero(keep)
     if not len(sel):return [],fun,Lg,Lb
     rank=(so+ca)/2;usedg=set();usedb=set()
@@ -81,7 +97,7 @@ def screen(G,B,VG,VB,ng,nb,R,per,fold,a,log=False):
         if kg in usedg or kb in usedb:continue
         usedg.add(kg);usedb.add(kb)
         out.append((i,j,dict(rank_score=float(rank[t]),sortino=float(so[t]),calmar=float(ca[t]),sharpe=float(sh[t]),cagr=float(cg[I[t],J[t]]),
-                             worst_half=float(wh[I[t],J[t]]),mdd=float(dd[t]),trade_loss=float(tl[t]),range_fy=float(rfy[t]))))
+                             worst_half=float(wh[I[t],J[t]]),mdd=float(dd[t]),trade_loss=float(tl[t]),range_fy=float(rfy[t]),loyo_cagr=float(lx[t]),loyo_year=str(ly[t]))))
         if len(out)==a.top:break
     return out,fun,Lg,Lb
 
@@ -99,6 +115,10 @@ def main(argv=None):
     ap.add_argument('--max-dd',type=float,default=.20,help='g. pair train drawdown cap (default %(default)s)')
     ap.add_argument('--max-trade-loss',type=float,default=.10,help='h. pair worst open trade loss cap (default %(default)s)')
     ap.add_argument('--max-fy-range',type=float,default=.40,help='i. range of complete-year returns cap (default %(default)s)')
+    ap.add_argument('--narrow-above',type=int,default=100,help='j. above this many pairs, apply --max-fy-range2 (default %(default)s)')
+    ap.add_argument('--max-fy-range2',type=float,default=.30,help='j. second full-year range cap (default %(default)s)')
+    ap.add_argument('--min-loyo-cagr',type=float,default=.20,help='k. worst leave-one-year-out post-tax CAGR floor (default %(default)s)')
+    ap.add_argument('--min-half2',type=float,default=.10,help='l. worst full train half floor (default %(default)s)')
     ap.add_argument('--distinct',choices=('signal','level','rule'),default='signal');ap.add_argument('--top',type=int,default=5)
     ap.add_argument('--train-start',default='2021-09-01');ap.add_argument('--split',default='2026-01-01');ap.add_argument('--end',default='2026-07-01')
     ap.add_argument('--loyo',action='store_true',help='repeat the screen with each train year left out and show the held-out year')
@@ -129,12 +149,13 @@ def main(argv=None):
     for n,(i,j,x) in enumerate(P,1):
         v=VG[i]+VB[j];o=og[i]+obb[j]
         print(f"{n}. rank {x['rank_score']:5.2f} = (Sortino {x['sortino']:4.2f} + Calmar {x['calmar']:4.2f}) / 2 | Sharpe {x['sharpe']:4.2f} | post-tax CAGR {100*x['cagr']:5.1f}% | "
-              f"worst half {100*x['worst_half']:5.1f}% | DD {100*x['mdd']:4.1f}% | worst trade {100*x['trade_loss']:4.1f}% | full-year range {100*x['range_fy']:4.1f}% | 2026H1 {100*o:6.1f}%")
+              f"worst half {100*x['worst_half']:5.1f}% | DD {100*x['mdd']:4.1f}% | worst trade {100*x['trade_loss']:4.1f}% | full-year range {100*x['range_fy']:4.1f}% | "
+              f"worst leave-one-year-out CAGR {100*x['loyo_cagr']:5.1f}% (without {x['loyo_year']}) | 2026H1 {100*o:6.1f}%")
         for s,r,L,k in (('G',G[i],Lg,i),('R',B[j],Lb,j)):
             print(f"   {s} {nm(r)}  [CAGR {100*L['cagr'][k]:.1f}%, Sharpe {L['sharpe'][k]:.2f}, Sortino {L['sortino'][k]:.2f}, Calmar {L['calmar'][k]:.2f}, "
                   f"worst trade {100*L['W'][k]:.1f}%, {int((ng if s=='G' else nb)[k])} trades]")
         print('   halves '+' '.join(f'{100*z:.0f}' for z in v)+f' | 2026H1 {100*o:.0f}')
-        row=dict(rank=n,**{k:round(val,4) for k,val in x.items()},oos_2026H1=round(float(o),4))
+        row=dict(rank=n,**{k:(round(val,4) if isinstance(val,float) else val) for k,val in x.items()},oos_2026H1=round(float(o),4))
         if Q:
             pq,qr=Q;qg,qb=qr.get(ws.strategy_key(G[i])),qr.get(ws.strategy_key(B[j]))
             if qg and qb:
@@ -149,7 +170,7 @@ def main(argv=None):
     print(f'\nbasket: the {k} pairs together, 1/{k} of the capital each')
     print('   halves '+' '.join(f'{100*z:.0f}' for z in bh)+f' | 2026H1 {100*bo:.0f} | post-tax CAGR {100*float(ws.post_tax_cagr(bh,per.train,fold.keep,fold.yrs,a.tax)):.1f}%, worst half {100*bh.min():.1f}%')
     if a.loyo:
-        print('\nleave-one-year-out: the same screen on the other years; the picked pairs in the held-out year (each pair, %)')
+        print('\nreport only (filters nothing): the whole screen re-run with each year hidden; the pairs it picks, in the hidden year (each pair, %)')
         held=[];bheld=[];stitch=np.full(len(per.train),np.nan)
         for y in per.years:
             P2,_,_,_=screen(G,B,VG,VB,ng,nb,R,per,Fold(per,R,days,y),a);hq=[q for q,p in enumerate(per.train) if p[:4]==y]

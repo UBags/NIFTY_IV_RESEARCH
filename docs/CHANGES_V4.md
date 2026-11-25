@@ -112,6 +112,13 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.25: pair_screen steps j-l (user, 2026-11-25)
+
+After step i, on all train years: (j) if more than `--narrow-above` (100) pairs are left, complete-year range <= `--max-fy-range2`
+(0.30); (k) worst leave-one-year-out post-tax CAGR (each train year dropped in turn) >= `--min-loyo-cagr` (0.20); (l) worst full train
+half >= `--min-half2` (0.10); (m) rank by (Sortino + Calmar) / 2. `--loyo` is now labelled a report: it re-runs the whole screen with
+each year hidden and filters nothing.
+
 ## V4.9.24: scripts/pair_screen.py, pairs by screening and ratio ranking (user, 2026-11-25)
 
 Instead of one ranking formula: (a) strategies with post-tax CAGR < 10% out (and < 15 train trades, a sanity floor); (b, c) each side

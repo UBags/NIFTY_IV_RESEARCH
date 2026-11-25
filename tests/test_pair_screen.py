@@ -49,3 +49,18 @@ class Screen(unittest.TestCase):
         self.assertEqual(cnt(t2,'pair drawdown <= 50%'),cnt(t2,r'worst half >= 2\.5%'))     # with the cap relaxed, they pass it
         _,t=self.run_screen(rows,eq,worst,'--loyo');self.assertIn('2023:',t);self.assertIn('held-out basket halves',t)
         with self.assertRaises(SystemExit):self.run_screen(rows,eq,worst,'--pair-cagr','.9')
+
+class StepsJtoL(Screen):
+    def test_loyo_cagr_and_half_floor(self):
+        import re
+        rows=[row('bull','A',[.03]+[.12]*8),row('bull','F',[.03,.6,.6]+[.02]*6),row('bull','G',[.03,.2,.2,.2,.2,.2,-.05,.2,.2]),row('bear','X',[.03]+[.10]*8)]
+        eq={k:steady(t,.01,n) for n,(k,t) in enumerate((('A',.96),('F',1.32),('G',1.55),('X',.8)))};worst={k:-.05 for k in eq}
+        P,t=self.run_screen(rows,eq,worst,'--top','3','--max-fy-range','2','--max-fy-range2','2')
+        cnt=lambda lab:int(re.search(lab+r'\s+(\d+)',t).group(1))
+        self.assertEqual(cnt(r'worst half >= 2\.5%'),3);self.assertIn('3 <= 100: no second range cut',t)
+        self.assertEqual(cnt('worst leave-one-year-out CAGR >= 20%'),2)        # F+X: without 2022 only 2 x 12% a year -> fails k
+        self.assertEqual(cnt('worst half >= 10%'),1)                           # G+X: 2024H2 at +5% fails l
+        self.assertEqual([(p['green_config'],p['red_config']) for p in P],[('A','X')])
+        self.assertEqual(P[0]['loyo_year'] in ('2022','2023','2024','2025'),True)
+        _,t2=self.run_screen(rows,eq,worst,'--top','3','--narrow-above','1','--max-fy-range','2')
+        self.assertIn('more than 1: full-year range <= 30%',t2)                # j applies above --narrow-above
