@@ -127,6 +127,16 @@ V4=dict(range_coef=12.,range_floor=.10,                                  # 12 / 
         dd=((.075,10.),(.10,10.),(.125,15.),(.15,15.),(.175,20.),(.20,30.),(.225,40.),(.25,50.)),   # - each weight whose drawdown step is exceeded
         tl=((.03,3.),(.05,6.),(.065,9.),(.08,20.),(.095,30.)))           # - each weight whose worst-trade-loss step is exceeded
 
+# Earlier versions, kept so their picks can be reproduced (pair_picker --v4-version). form 'neg': w n g^(n - off) for n negative
+# periods, counted on every kept period (a partial first one included); form 'weak' (V4): w g^(periods below the floor), full periods.
+_DD5=((.075,10.),(.10,10.),(.125,15.),(.15,15.),(.175,20.))
+V4_VERSIONS={
+    1:dict(V4,range_coef=10.,fy_pen=40.,hy_pen=30.,form='neg',neg_half=40.,neg_half_off=1.,neg_quarter=10.,neg_quarter_off=1.,growth=1.,dd=_DD5,count_partial=True),   # V4.9.19
+    2:dict(V4,range_coef=10.,fy_pen=50.,hy_pen=40.,form='neg',neg_half=40.,neg_half_off=1.,neg_quarter=10.,neg_quarter_off=1.,growth=2.,count_partial=True),           # V4.9.20
+    3:dict(V4,range_coef=10.,fy_pen=50.,hy_pen=40.,form='neg',neg_half=50.,neg_half_off=0.,neg_quarter=10.,neg_quarter_off=1.,growth=2.,count_partial=True),           # V4.9.21
+    5:dict(V4,form='weak'),                                                                                                                                             # V4.9.23 (current)
+}
+
 def weak_penalty(weak,w,g):
     """w x g^weak, weak = periods below the floor: w with none (a constant, no effect on the ranking), each weak period doubles it (g = 2)."""
     return w*np.power(g,np.asarray(weak,float))
@@ -172,8 +182,11 @@ def score_v4(H,Q,ph,pq,mdd,tl,tax,exclude=None,c=V4):
     ch=kh if c.get('count_partial') else kh&full_periods(ph);cq=kq if c.get('count_partial') else kq&full_periods(pq)
     Hc=H[...,ch];Qc=Q[...,cq]
     wh=(Hc<c['half_floor']).sum(-1);nh=(Hc<0).sum(-1);wq=(Qc<c['quarter_floor']).sum(-1);nq=(Qc<0).sum(-1)
-    stab=(c['range_coef']/np.maximum(rfy,c['range_floor'])-c['fy_pen']*(rfy>c['fy_cap'])-c['hy_pen']*(rhy>c['hy_cap'])
-          -weak_penalty(wh,c['weak_half'],c['growth'])-weak_penalty(wq,c['weak_quarter'],c['growth']))
+    if c.get('form','weak')=='neg':                                          # versions 1-3: negative periods, w n g^(n - off)
+        cnt=lambda n,w,off:np.where(n>0,w*n*np.power(c['growth'],np.asarray(n,float)-off),0.)
+        pen=cnt(nh,c['neg_half'],c['neg_half_off'])+cnt(nq,c['neg_quarter'],c['neg_quarter_off'])
+    else:pen=weak_penalty(wh,c['weak_half'],c['growth'])+weak_penalty(wq,c['weak_quarter'],c['growth'])
+    stab=c['range_coef']/np.maximum(rfy,c['range_floor'])-c['fy_pen']*(rfy>c['fy_cap'])-c['hy_pen']*(rhy>c['hy_cap'])-pen
     ret=sum(w*(C>t) for t,w in c['steps'])+c['slope']*sum(C-t for t in c['slopes'])
     risk=sum(w*(mdd>t) for t,w in c['dd'])+sum(w*(tl>t) for t,w in c['tl'])
     return dict(score=stab+ret-risk,cagr_ex_best=cx,range_fy=rfy,range_hy=rhy,weak_halves=wh,neg_halves=nh,weak_quarters=wq,neg_quarters=nq,

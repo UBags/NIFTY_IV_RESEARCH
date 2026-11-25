@@ -112,6 +112,13 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.26: recorded baskets and v4 score versions (user, 2026-11-25)
+
+`docs/BASKETS.md` and `config/baskets/*.csv`: the v3 objective basket, the wide_search_v4 poolv3_1000 objective basket (verticals) and
+its v4 version 2 basket (nakeds), leg by leg, with their training figures and the commands that regenerate them; the files are
+pair_report inputs. `pair_picker --v4-version 1 | 2 | 3 | 5` (`wide_search.V4_VERSIONS`) brings back the earlier v4 score versions
+(V4.9.19, V4.9.20, V4.9.21; 5 = V4.9.23, the default); a test checks they reproduce the scores the runs printed.
+
 ## V4.9.25: pair_screen steps j-l (user, 2026-11-25)
 
 After step i, on all train years: (j) if more than `--narrow-above` (100) pairs are left, complete-year range <= `--max-fy-range2`

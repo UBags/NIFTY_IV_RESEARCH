@@ -113,7 +113,9 @@ def v4_parts(gi,bi,V,F,a,held):
 
 def v4_config(a):
     """wide_search.V4 with the command's floors and counting options."""
-    return dict(ws.V4,half_floor=a.v4_half_floor,quarter_floor=a.v4_quarter_floor,count_partial=a.v4_count_partial)
+    c=dict(ws.V4_VERSIONS[a.v4_version])
+    if a.v4_version==5:c.update(half_floor=a.v4_half_floor,quarter_floor=a.v4_quarter_floor,count_partial=a.v4_count_partial)
+    return c
 
 def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
     """Greedy diverse pick on the halves in keep. Returns [(i, j, cagr, obj, positive share, v4 parts or {})]."""
@@ -148,6 +150,7 @@ def main(argv=None):
     ap.add_argument('--range-floor',type=float,default=.05);ap.add_argument('--tax',type=float,default=.35)
     ap.add_argument('--rank',choices=('objective','cagr','worst-half','v4'),default='objective',help='objective (default), cagr, worst-half, or v4 (the V4.9.19 score; needs --quarters and --risk)')
     ap.add_argument('--risk',help='scripts/strategy_risk.py output (npz) for --rank v4')
+    ap.add_argument('--v4-version',type=int,choices=sorted(ws.V4_VERSIONS),default=5,help='v4 score version: 1 (V4.9.19), 2 (V4.9.20), 3 (V4.9.21), 5 (V4.9.23, default); see docs/BASKETS.md')
     ap.add_argument('--v4-half-floor',type=float,default=ws.V4['half_floor'],help='v4: a train half-year below this counts as weak (default %(default)s)')
     ap.add_argument('--v4-quarter-floor',type=float,default=ws.V4['quarter_floor'],help='v4: a train quarter below this counts as weak (default %(default)s)')
     ap.add_argument('--v4-count-partial',action='store_true',help='v4: count a partial first half / quarter (2021H2, 2021Q3) as well')
@@ -200,10 +203,12 @@ def main(argv=None):
         wgf,egf,hg=rk(G);wbf,ebf,hb=rk(B)
         if (~hg).sum() or (~hb).sum():print(f'  no risk figures for {int((~hg).sum())} green and {int((~hb).sum())} red strategies: left out')
         okg&=hg;okb&=hb;F['risk']=dict(wg=wgf,wb=wbf,eg=egf,eb=ebf,years=yrs_r)
-        print(f'ranking: v4 = 12/max(full-year range,.10) -60[>.40] -50[half range>.30] -50 x 2^(halves < {a.v4_half_floor:g}) '
-              f'-10 x 2^(quarters < {a.v4_quarter_floor:g}) +15 at CAGR .25/.30/.35 +100 x (C-.20, C-.25, C-.30, C-.35) '
-              f'- drawdown steps (.075..25) - trade-loss steps (.03..095); C = post-tax CAGR without the best full year, capped at 50%; '
-              f'weak / negative periods counted on {"all" if a.v4_count_partial else "full"} train periods')
+        c4=v4_config(a)
+        if c4.get('form')=='neg':pen=(f"-{c4['neg_half']:g} n {c4['growth']:g}^(n-{c4['neg_half_off']:g}) (n negative halves) -{c4['neg_quarter']:g} m {c4['growth']:g}^(m-{c4['neg_quarter_off']:g}) (m negative quarters)")
+        else:pen=f"-{c4['weak_half']:g} x 2^(halves < {c4['half_floor']:g}) -{c4['weak_quarter']:g} x 2^(quarters < {c4['quarter_floor']:g})"
+        print(f"ranking: v4 version {a.v4_version} = {c4['range_coef']:g}/max(full-year range,.10) -{c4['fy_pen']:g}[>.40] -{c4['hy_pen']:g}[half range>.30] {pen} "
+              f"+15 at CAGR .25/.30/.35 +100 x (C-.20, C-.25, C-.30, C-.35) - drawdown steps (.075..{c4['dd'][-1][0]:g}) - trade-loss steps (.03..095); "
+              f"C = post-tax CAGR without the best full year, capped at 50%; periods counted: {'all' if c4.get('count_partial') else 'full'}")
     fl=[f'every half > {100*a.min_half:g}%' if a.min_half is not None else '',f'every quarter > {100*a.min_quarter:g}%' if a.min_quarter is not None else '']
     fl=' and '.join(x for x in fl if x)
     if fl:print(f"floors: {fl} ({'out-of-sample included for the '+a.include_oos+' floor'+('s' if a.include_oos=='both' else '')+': 2026H1 is no longer a test' if a.include_oos else 'train only'}"

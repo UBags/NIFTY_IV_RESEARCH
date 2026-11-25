@@ -1,0 +1,6 @@
+rank,green_structure,green_level,green_config,green_profit,green_stop,red_structure,red_level,red_config,red_profit,red_stop
+1,naked,-2.0,N3_k1.0_m12_j0.25_tw6,ptime5,atr20x1.25,naked,-1.0,N5_k0.25_m8_j1.25_tw5,none,mloss1.5
+2,naked,-2.0,N3_k1.25_m8_j1.0_tw3,none,c:mloss2|none|exp2,naked,-2.0,N3_k0.25_m8_j1.5_tw2,target30x5,donch6c0.25
+3,naked,-2.0,N3_k1.0_m12_j1.25_tw3,none,c:atr15x1|none|exp2,naked,-1.0,zone_only_tw2,tp90,stag1a1
+4,naked,-2.0,N3_k1.25_m8_j0.75_tw2,tp75,c:mloss2|none|exp2,naked,-2.0,zone_only_tw3,tp70,atr20x1.25
+5,naked,-2.0,N3_k1.0_m12_j1.5_tw3,ptime5,eatr30x1,naked,-1.0,N5_k0.5_m8_j1.5_tw5,ptime7,pct1

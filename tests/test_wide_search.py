@@ -272,3 +272,14 @@ class ScoreV4919(unittest.TestCase):
         self.assertAlmostEqual(self.s(H2,exclude='2024')['score'],self.s(H,exclude='2024')['score'])
         with self.assertRaises(ValueError):ws.score_v4(np.zeros((1,3)),np.zeros((1,6)),ws.Periods('2024-07-01','2026-01-01','2026-07-01','half'),
                                                        ws.Periods('2024-07-01','2026-01-01','2026-07-01','quarter'),np.zeros(1),np.zeros(1),.35,'2025')
+
+class ScoreVersions(unittest.TestCase):
+    """--v4-version presets reproduce the scores printed by the runs of V4.9.19 / V4.9.20 / V4.9.21 (78.1) and V4.9.23 (29.8) for the pair
+    naked -2 N3_k1.0_m12_j1.25_tw3 / naked -1 zone_only_tw2 (halves, quarters, drawdown and worst trade from pairs_v4*.csv)."""
+    def test_printed_scores(self):
+        H=np.array([[.1524,.4042,.2877,.3977,.3549,.3527,.3619,.2411,.3401]])
+        Q=np.array([[0.0,.1524,.1943,.2098,.1339,.1538,.1546,.2432,.1266,.2283,.0295,.3232,.1406,.2213,.1483,.0928,.3411,-.001]])
+        ph=ws.Periods('2021-09-01','2026-01-01','2026-07-01','half');pq=ws.Periods('2021-09-01','2026-01-01','2026-07-01','quarter')
+        for v,want in ((1,78.1),(2,78.1),(3,78.1),(5,29.8)):
+            r=ws.score_v4(H,Q,ph,pq,np.array([.1434]),np.array([.0934]),.35,c=ws.V4_VERSIONS[v]);self.assertAlmostEqual(float(r['score'][0]),want,delta=.06)
+        self.assertEqual(ws.V4_VERSIONS[5]['form'],'weak');self.assertEqual(len(ws.V4_VERSIONS[1]['dd']),5)
