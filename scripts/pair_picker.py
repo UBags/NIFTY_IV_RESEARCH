@@ -15,7 +15,7 @@ in time, so both can use the whole capital). A pair qualifies when
 The floors skip a partial first period (2021H2 = Sep-Dec, 2021Q3 = Sep only) unless --floor-partial. --include-oos applies the
 floors to the out-of-sample periods too (2026H1, 2026Q1-Q2): then 2026H1 is no longer out of sample.
 Qualifying pairs are ranked all-positive first (unless --no-prefer-all-positive), then by --rank (objective: the wide search's
-composite with the same --cagr-floor and --range-cap; or cagr; or worst-half; or v4: the user's V4.9.19 score, wide_search.score_v4,
+composite with the same --cagr-floor and --range-cap; or cagr; or worst-half; or v4: the user's score, wide_search.score_v4 (floors: --v4-half-floor, --v4-quarter-floor),
 on the pair's halves, quarters, drawdown and worst trade; needs --quarters and --risk from scripts/strategy_risk.py. The pair's
 drawdown is that of the two legs' summed daily equity and its worst trade the worse leg's; in --loyo every term of a held-out year's
 pick leaves that year out, the drawdown and worst trade included). Pairs are taken greedily: a pair is skipped if either
@@ -109,7 +109,11 @@ def v4_parts(gi,bi,V,F,a,held):
     R=F['risk'];f=0 if held is None else 1+R['years'].index(held)
     GT,BT,_,_,_,_=F['quarter'];Q=GT[gi][:,None,:]+BT[bi][None,:,:]
     tl=np.maximum(-R['wg'][gi,f][:,None],-R['wb'][bi,f][None,:]);dd=pair_drawdown(R['eg'][gi,f],R['eb'][bi,f])
-    p=ws.score_v4(V,Q,F['per_half'],F['per_quarter'],dd,tl,a.tax,exclude=held);p['mdd']=dd;p['trade_loss']=tl;return p
+    p=ws.score_v4(V,Q,F['per_half'],F['per_quarter'],dd,tl,a.tax,exclude=held,c=v4_config(a));p['mdd']=dd;p['trade_loss']=tl;return p
+
+def v4_config(a):
+    """wide_search.V4 with the command's floors and counting options."""
+    return dict(ws.V4,half_floor=a.v4_half_floor,quarter_floor=a.v4_quarter_floor,growth_by=a.v4_growth_by,count_partial=a.v4_count_partial)
 
 def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
     """Greedy diverse pick on the halves in keep. Returns [(i, j, cagr, obj, positive share, v4 parts or {})]."""
@@ -144,6 +148,10 @@ def main(argv=None):
     ap.add_argument('--range-floor',type=float,default=.05);ap.add_argument('--tax',type=float,default=.35)
     ap.add_argument('--rank',choices=('objective','cagr','worst-half','v4'),default='objective',help='objective (default), cagr, worst-half, or v4 (the V4.9.19 score; needs --quarters and --risk)')
     ap.add_argument('--risk',help='scripts/strategy_risk.py output (npz) for --rank v4')
+    ap.add_argument('--v4-half-floor',type=float,default=ws.V4['half_floor'],help='v4: a train half-year below this counts as weak (default %(default)s)')
+    ap.add_argument('--v4-quarter-floor',type=float,default=ws.V4['quarter_floor'],help='v4: a train quarter below this counts as weak (default %(default)s)')
+    ap.add_argument('--v4-growth-by',choices=('negative','weak'),default=ws.V4['growth_by'],help='v4: the 2^k factor counts negative periods (default) or weak ones')
+    ap.add_argument('--v4-count-partial',action='store_true',help='v4: count a partial first half / quarter (2021H2, 2021Q3) as well')
     ap.add_argument('--no-prefer-all-positive',dest='prefer_all_positive',action='store_false')
     ap.add_argument('--distinct',choices=('signal','level','rule'),default='signal');ap.add_argument('--top',type=int,default=5)
     ap.add_argument('--train-start',default='2021-09-01');ap.add_argument('--split',default='2026-01-01');ap.add_argument('--end',default='2026-07-01')
@@ -193,9 +201,10 @@ def main(argv=None):
         wgf,egf,hg=rk(G);wbf,ebf,hb=rk(B)
         if (~hg).sum() or (~hb).sum():print(f'  no risk figures for {int((~hg).sum())} green and {int((~hb).sum())} red strategies: left out')
         okg&=hg;okb&=hb;F['risk']=dict(wg=wgf,wb=wbf,eg=egf,eb=ebf,years=yrs_r)
-        print('ranking: v4 = 10/max(full-year range,.10) -50[>.40] -40[half range>.30] -50 n 2^n (n negative halves) -10 m 2^(m-1) (m negative quarters) '
-              '+15 at CAGR .25/.30/.35 +100 x (C-.20, C-.25, C-.30, C-.35) - drawdown steps (.075..25) - trade-loss steps (.03..095); '
-              'C = post-tax CAGR without the best full year, capped at 50%')
+        print(f'ranking: v4 = 12/max(full-year range,.10) -60[>.40] -50[half range>.30] -50 x (halves < {a.v4_half_floor:g}) x 2^({a.v4_growth_by} halves) '
+              f'-10 x (quarters < {a.v4_quarter_floor:g}) x 2^({a.v4_growth_by} quarters) +15 at CAGR .25/.30/.35 +100 x (C-.20, C-.25, C-.30, C-.35) '
+              f'- drawdown steps (.075..25) - trade-loss steps (.03..095); C = post-tax CAGR without the best full year, capped at 50%; '
+              f'weak / negative periods counted on {"all" if a.v4_count_partial else "full"} train periods')
     fl=[f'every half > {100*a.min_half:g}%' if a.min_half is not None else '',f'every quarter > {100*a.min_quarter:g}%' if a.min_quarter is not None else '']
     fl=' and '.join(x for x in fl if x)
     if fl:print(f"floors: {fl} ({'out-of-sample included for the '+a.include_oos+' floor'+('s' if a.include_oos=='both' else '')+': 2026H1 is no longer a test' if a.include_oos else 'train only'}"
@@ -210,7 +219,7 @@ def main(argv=None):
         v=VG[i]+VB[j];o=og[i]+obb[j]
         print(f"{n}. obj {ob:5.2f} | post-tax CAGR {100*cg:5.1f}% | positive {round(pos*len(tr))}/{len(tr)} | worst half {100*v.min():5.1f}% range {100*(v.max()-v.min()):4.1f}% | 2026H1 {100*o:6.1f}%")
         if x4:print(f"   v4 {x4['score']:6.1f} = stability {x4['stability']:6.1f} + return {x4['return_']:6.1f} - risk {x4['risk']:5.1f} | CAGR w/o best year {100*x4['cagr_ex_best']:5.1f}% | "
-                    f"full-year range {100*x4['range_fy']:4.1f}% | negative halves {int(x4['neg_halves'])}, quarters {int(x4['neg_quarters'])} | pair DD {100*x4['mdd']:4.1f}% | worst trade {100*x4['trade_loss']:4.1f}%")
+                    f"full-year range {100*x4['range_fy']:4.1f}% | halves <{100*a.v4_half_floor:g}% {int(x4['weak_halves'])} (<0 {int(x4['neg_halves'])}), quarters <{100*a.v4_quarter_floor:g}% {int(x4['weak_quarters'])} (<0 {int(x4['neg_quarters'])}) | pair DD {100*x4['mdd']:4.1f}% | worst trade {100*x4['trade_loss']:4.1f}%")
         print(f"   G {nm(G[i])}  [worst trade {100*wg[i]:.1f}%, train DD {100*dg[i]:.1f}%, {int(ng[i])} trades]")
         print(f"   R {nm(B[j])}  [worst trade {100*wb[j]:.1f}%, train DD {100*db[j]:.1f}%, {int(nb[j])} trades]")
         print('   halves '+' '.join(f'{100*x:.0f}' for x in v)+f' | {oh[0][4:] if oh else ""} '+' '.join(f'{100*(F["half"][2][i][q]+F["half"][3][j][q]):.0f}' for q in range(len(oh))))

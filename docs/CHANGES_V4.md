@@ -112,6 +112,20 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.22: v4 score, fourth version (user, 2026-11-25)
+
+    12/max(Rfy, .10) - 60[Rfy > .40] - 50[Rhy > .30]
+    - 50 x (halves < .05) x 2^(negative halves) - 10 x (quarters < .025) x 2^(negative quarters)
+    + 15([C > .25] + [C > .30] + [C > .35]) + 100 x ((C - .20) + (C - .25) + (C - .30) + (C - .35))
+    - drawdown steps (.075 .. .25, as V4.9.20) - trade-loss steps (.03 .. .095)
+
+| Change | What |
+|---|---|
+| Weak periods | A train half-year below `half_floor` (.05) or quarter below `quarter_floor` (.025) is weak; each weak one costs 50 / 10, doubled for every negative period of its kind (`wide_search.weak_penalty`). `pair_picker --v4-half-floor`, `--v4-quarter-floor`. |
+| Counting | Weak and negative periods are counted on full train periods only: the partial first half (2021H2 from 1 Sep) and quarter (2021Q3, September only) are not (`--v4-count-partial` to include them; the half-year range still includes 2021H2, as before). |
+| Exponent | As written, the 2^k factor counts negative periods; `--v4-growth-by weak` counts the weak ones instead. |
+| Weights | 12 (was 10) / max(Rfy, .10); cliffs 60 (was 50) and 50 (was 40). |
+
 ## V4.9.21: v4 score, third version (user, 2026-11-25)
 
 Negative train half-years now cost 50 n 2^n (1: 100, 2: 400, 3: 1200; was 40 n 2^(n-1)); everything else as V4.9.20

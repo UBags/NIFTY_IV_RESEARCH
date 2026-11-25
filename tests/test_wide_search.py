@@ -229,37 +229,47 @@ class SpeedV4917(Fixture):
         self.assertIn('kernel',res['phases'])
 
 class ScoreV4919(unittest.TestCase):
-    """User score (2026-11-25, second version): stability, capped CAGR without the best full year, drawdown and trade-loss steps, held-out year."""
+    """User score (2026-11-25, V4.9.22 version): stability with weak-period floors, capped CAGR without the best full year, drawdown
+    and trade-loss steps, held-out year."""
     ph=ws.Periods('2021-09-01','2026-01-01','2026-07-01','half');pq=ws.Periods('2021-09-01','2026-01-01','2026-07-01','quarter')
-    def s(self,H,Q=None,mdd=0.,tl=0.,exclude=None):
-        H=np.atleast_2d(np.asarray(H,float));Q=np.full((len(H),len(self.pq.train)),.01) if Q is None else np.atleast_2d(np.asarray(Q,float))
-        return {k:v[0] for k,v in ws.score_v4(H,Q,self.ph,self.pq,np.full(len(H),mdd),np.full(len(H),tl),.35,exclude).items()}
-    def test_full_years(self):
+    def s(self,H,Q=None,mdd=0.,tl=0.,exclude=None,**c):
+        H=np.atleast_2d(np.asarray(H,float));Q=np.full((len(H),len(self.pq.train)),.05) if Q is None else np.atleast_2d(np.asarray(Q,float))
+        return {k:v[0] for k,v in ws.score_v4(H,Q,self.ph,self.pq,np.full(len(H),mdd),np.full(len(H),tl),.35,exclude,dict(ws.V4,**c)).items()}
+    def test_full_years_and_periods(self):
         self.assertEqual(ws.full_years(self.ph),['2022','2023','2024','2025']);self.assertEqual(ws.full_years(self.ph,'2024'),['2022','2023','2025'])
+        self.assertFalse(ws.full_periods(self.ph)[0]);self.assertTrue(ws.full_periods(self.ph)[1:].all())   # 2021H2 from 1 Sep is partial
+        self.assertFalse(ws.full_periods(self.pq)[0]);self.assertTrue(ws.full_periods(self.pq)[1:].all())   # 2021Q3 (Sep only) partial, 2021Q4 full
     def test_parts_by_hand(self):
-        H=[.03,.30,.30,.02,.02,.05,.05,.10,.10]                   # full years .60 .04 .10 .20 (best 2022)
+        H=[.03,.30,.30,.02,.02,.06,.06,.10,.10]                   # full years .60 .04 .12 .20 (best 2022); weak halves 2023H1/H2 (2021H2 partial)
         r=self.s(H,mdd=.12,tl=.09)
-        self.assertAlmostEqual(r['range_fy'],.56);self.assertAlmostEqual(r['range_hy'],.28)
+        self.assertAlmostEqual(r['range_fy'],.56);self.assertAlmostEqual(r['range_hy'],.28);self.assertEqual((r['weak_halves'],r['neg_halves']),(2,0))
         keep=np.array([p[:4]!='2022' for p in self.ph.train]);c=float(ws.post_tax_cagr(np.array(H),self.ph.train,keep,ws.fold(self.ph)[1]-1,.35))
         self.assertAlmostEqual(r['cagr_ex_best'],c)
-        self.assertAlmostEqual(r['stability'],10/.56-50);self.assertEqual(r['risk'],10+10+3+6+9+20)
+        self.assertAlmostEqual(r['stability'],12/.56-60-50*2);self.assertEqual(r['risk'],10+10+3+6+9+20)
         self.assertAlmostEqual(r['return_'],100*(4*c-1.1)+15*(c>.25)+15*(c>.30)+15*(c>.35))
         self.assertAlmostEqual(r['score'],r['stability']+r['return_']-r['risk'])
-    def test_negatives_floor_and_cap(self):
-        H=[.2]*9;Q=[.1]*18;Q[3]=-.01
-        r=self.s(H,Q);self.assertEqual(r['neg_quarters'],1);self.assertAlmostEqual(r['stability'],100-10)   # range 0 -> floor .10
-        r=self.s([.2]*8+[-.01]);self.assertEqual(r['neg_halves'],1)
-        self.assertEqual([float(ws.count_penalty(n,50.,2.,0.)) for n in range(4)],[0.,100.,400.,1200.])   # halves: 50 n 2^n
-        self.assertEqual([float(ws.count_penalty(n,10.,2.,1.)) for n in range(4)],[0.,10.,40.,120.])     # quarters: 10 m 2^(m-1)
-        two=self.s([.2]*6+[-.01,.2,-.01]);   # 2024H2 and 2025H2: same full-year and half ranges as one negative
-        self.assertEqual(two['neg_halves'],2);self.assertAlmostEqual(r['stability']-two['stability'],400-100)  # 50 x 2 x 4 vs 50 x 1 x 2
-        Q3=[.1]*18;Q3[3]=Q3[7]=Q3[11]=-.01;self.assertAlmostEqual(self.s(H,Q3)['stability'],100-10*3*4)                                      # 3 quarters: 120
-        self.assertEqual(self.s(H,mdd=.26)['risk'],10+10+15+15+20+30+40+50);self.assertEqual(self.s(H,mdd=.21)['risk'],10+10+15+15+20+30)
+    def test_weak_and_negative_counts(self):
+        self.assertEqual([float(ws.weak_penalty(w,n,50.,2.)) for w,n in ((0,0),(1,0),(2,0),(2,1),(3,2))],[0.,50.,100.,200.,600.])
+        base=[.2]*9
+        one=self.s([.2]*7+[.01,.2]);self.assertEqual((one['weak_halves'],one['neg_halves']),(1,0))
+        neg=self.s([.2]*7+[-.01,.2]);self.assertEqual((neg['weak_halves'],neg['neg_halves']),(1,1))
+        rng=lambda r:12/max(r['range_fy'],.1)-60*(r['range_fy']>.4)-50*(r['range_hy']>.3)
+        self.assertAlmostEqual(rng(one)-one['stability'],50);self.assertAlmostEqual(rng(neg)-neg['stability'],100)   # the weak half, now negative: 100 instead of 50
+        self.assertAlmostEqual(self.s(base,growth_by='weak')['stability'],self.s(base)['stability'])
+        two=self.s([.2]*6+[.01,.2,.01],growth_by='weak');self.assertAlmostEqual(rng(two)-two['stability'],50*2*4)       # growth by weak: 2 weak -> 50 x 2 x 2^2
+        self.assertAlmostEqual(rng(self.s([.2]*6+[.01,.2,.01]))-self.s([.2]*6+[.01,.2,.01])['stability'],50*2*1)           # default: no negative -> 50 x 2
+        Q=[.05]*18;Q[3]=.01;Q[7]=-.01                            # one weak, one negative quarter: 10 x 2 x 2^1
+        self.assertAlmostEqual(self.s(base)['stability']-self.s(base,Q)['stability'],40)
+        self.assertAlmostEqual(self.s(base,half_floor=.25)['stability'],12/.1-50*8)       # every full half below .25: 8 weak
+        partial=[.01]+[.2]*8;self.assertEqual(self.s(partial)['weak_halves'],0);self.assertEqual(self.s(partial,count_partial=True)['weak_halves'],1)
+        Qp=[0.]+[.05]*17;self.assertEqual(self.s(base,Qp)['weak_quarters'],0)              # an empty partial 2021Q3 (Sep only) is not weak
+    def test_floor_and_cap(self):
+        self.assertAlmostEqual(self.s([.2]*9)['stability'],120.)                          # range 0 -> floor .10
         big=self.s([2.]*9);self.assertGreater(big['cagr_ex_best'],.5);self.assertAlmostEqual(big['return_'],45+100*(4*.5-1.1))
+        self.assertEqual(self.s([.2]*9,mdd=.26)['risk'],10+10+15+15+20+30+40+50);self.assertEqual(self.s([.2]*9,mdd=.21)['risk'],10+10+15+15+20+30)
     def test_one_great_year_loses_its_credit(self):
         steady=self.s([.25]*9);spike=self.s([.25,1.5,1.5]+[.0]*6)
-        self.assertLess(spike['cagr_ex_best'],.06);   # only the partial 2021 (+25%) and 2023-25 (0) remain
-        self.assertGreater(steady['score'],spike['score'])
+        self.assertLess(spike['cagr_ex_best'],.06);self.assertGreater(steady['score'],spike['score'])
     def test_held_out_year_is_ignored(self):
         H=[.2]*9;H2=list(H);H2[5]=H2[6]=-.5                       # 2024 bad
         self.assertLess(self.s(H2)['score'],self.s(H)['score'])
