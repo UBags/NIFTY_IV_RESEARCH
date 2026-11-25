@@ -30,6 +30,64 @@ OPEN,CLOSE=9*60+15,15*60+30
 ROW=re.compile(r'^\s*([^,]+),(\d{4})[/-](\d{2})[/-](\d{2}),(\d{1,2}):(\d{2})(?::(\d{2}))?,(.*)$')
 ROW_DMY=re.compile(r'^\s*([^,]+),(\d{1,2})([/-])(\d{1,2})[/-](\d{4}),(\d{1,2}):(\d{2})(?::(\d{2}))?,(.*)$')     # day-first dates (checked by the expiry rule)
 
+MON3={m[:3]:i for m,i in MONTHS.items()}
+NAME_OLD=re.compile(r'\s*(PE|CE)\s*(\d+(?:\.\d+)?)\s*',re.I)                                             # 'CE 8250'
+NAME_NIFTY=re.compile(r'\s*NIFTY\s*(?:(\d{1,2})([A-Za-z]{3})(\d{2}))?\s*(\d+(?:\.\d+)?)\s*(CE|PE)\s*',re.I)  # 'NIFTY8250CE', 'NIFTY25Jun208250CE'
+RANGE=re.compile(r'(\d{1,2})-(\d{1,2})-(\d{2,4})\s*to\s*(\d{1,2})-(\d{1,2})-(\d{2,4})')                   # 'CSV 25-05-19 to 25-07-19'
+
+def parse_name(base):
+    """Contract from a file or symbol name -> (cp, strike, expiry ordinal or None, style) or None."""
+    m=NAME_OLD.fullmatch(base)
+    if m:return m.group(1).upper(),float(m.group(2)),None,'CE 8250'
+    m=NAME_NIFTY.fullmatch(base)
+    if m:
+        dd,mon,yy,k,cp=m.groups();exp=None
+        if dd:
+            if mon.lower() not in MON3:return None
+            try:exp=dt.date(2000+int(yy),MON3[mon.lower()],int(dd)).toordinal()
+            except ValueError:return None
+        return cp.upper(),float(k),exp,('NIFTY25Jun208250CE' if dd else 'NIFTY8250CE')
+    return None
+
+def name_range_end(trail):
+    """End date of a 'dd-mm-yy to dd-mm-yy' range in any zip name of the trail (ordinal) or None."""
+    for t in reversed(trail):
+        m=RANGE.search(os.path.basename(t))
+        if m:
+            d,mo,y=int(m.group(4)),int(m.group(5)),int(m.group(6));y+=2000 if y<100 else 0
+            try:return dt.date(y,mo,d).toordinal()
+            except ValueError:return None
+    return None
+
+def collect_members(Z,trail=(),notes=None,depth=0):
+    """Descend zips of zips through any folders, to any depth. At each level: .csv members if any (the .txt copies beside
+    them are ignored); else inner zips, preferring those named CSV (user: ignore the TXT copy); else .txt members.
+    Returns [(ZipFile, ZipInfo, trail)], the members of the deepest level reached (for diagnostics) and notes."""
+    notes=[] if notes is None else notes
+    mem=[i for i in Z.infolist() if not i.is_dir()]
+    csv=[i for i in mem if i.filename.lower().endswith('.csv')];txt=[i for i in mem if i.filename.lower().endswith('.txt')]
+    inner=[i for i in mem if i.filename.lower().endswith('.zip')]
+    if csv:
+        if txt:notes.append(f'{len(txt)} .txt beside {len(csv)} .csv ignored')
+        if inner:notes.append(f'inner zips beside .csv files ignored: {[i.filename for i in inner][:3]}')
+        return [(Z,i,trail) for i in csv],(Z,mem),notes
+    if inner and depth<8:
+        bn=lambda i:os.path.basename(i.filename).lower()
+        pick=[i for i in inner if 'csv' in bn(i)] or [i for i in inner if 'txt' not in bn(i)]
+        if not pick:pick=inner;notes.append('only TXT inner zips: used')
+        skipped=[i.filename for i in inner if i not in pick]
+        notes.append(f'{"/".join(os.path.basename(t) for t in trail) or "zip"} -> {[i.filename for i in pick]}'+(f' (skipped {skipped})' if skipped else ''))
+        out=[];last=(Z,mem)
+        for i in pick:
+            try:Zi=zipfile.ZipFile(io.BytesIO(Z.read(i)))
+            except zipfile.BadZipFile:notes.append(f'BAD INNER ZIP {i.filename}');continue
+            o,last,_=collect_members(Zi,trail+(i.filename,),notes,depth+1);out+=o
+        return out,last,notes
+    if txt:
+        notes.append(f'no .csv anywhere: {len(txt)} .txt used')
+        return [(Z,i,trail) for i in txt],(Z,mem),notes
+    return [],(Z,mem),notes
+
 def say(*a):print(*a,flush=True)
 def hdr(t):say(f'\n{"="*100}\n{t}\n{"="*100}')
 def dfmt(o):return dt.date.fromordinal(int(o)).isoformat()
@@ -201,7 +259,7 @@ def main(argv=None):
     tdays=set(PDs.get('spot',{}))
     rows=[];optdays=collections.Counter();opt_first=collections.Counter();opt_last=collections.Counter();opt_nb=collections.Counter()
     fmt_issues=collections.Counter();fmt_examples=[];vol=[];parity=[];vol_v=[];zsum=[];unrec=[];lagpairs=collections.defaultdict(list);covr=[]
-    layouts=collections.Counter();datefmts=collections.Counter();headers=collections.Counter()
+    layouts=collections.Counter();datefmts=collections.Counter();headers=collections.Counter();styles=collections.Counter();fields=collections.defaultdict(collections.Counter)
     F1=fut_all.get('NIFTY_F1');fk=None
     if F1 is not None:fk=dict(zip(F1.key().tolist(),F1.c.tolist()))
     SPk=dict(zip(spot_all.key().tolist(),spot_all.c.tolist())) if spot_all is not None else {}
@@ -209,26 +267,23 @@ def main(argv=None):
     for (y,mo),zp in items:
         try:Z=zipfile.ZipFile(zp)
         except zipfile.BadZipFile:say(f'  {dt.date(y,mo,1):%B %Y}: BAD ZIP');continue
-        inner=[i for i in Z.infolist() if i.filename.lower().endswith('.zip')];layout='flat'
-        if inner:                                                     # zip of zips: the (CSV) one (user: ignore the TXT copy)
-            pick=[i for i in inner if 'csv' in os.path.basename(i.filename).lower()] or [i for i in inner if 'txt' not in os.path.basename(i.filename).lower()] or inner
-            layout=f'nested -> {pick[0].filename}'+(f' (also {[i.filename for i in inner if i is not pick[0]]})' if len(inner)>1 else '')
-            try:Z=zipfile.ZipFile(io.BytesIO(Z.read(pick[0])))
-            except zipfile.BadZipFile:say(f'  {dt.date(y,mo,1):%B %Y}: BAD INNER ZIP {pick[0].filename}');continue
-            layouts['nested']+=1
-        mem=[i for i in Z.infolist() if not i.is_dir()];dirs=collections.Counter(os.path.dirname(i.filename) for i in mem)
-        txt=[i for i in mem if i.filename.lower().endswith(('.txt','.csv'))];oth=[i.filename for i in mem if not i.filename.lower().endswith(('.txt','.csv'))]
-        C={};zlast=0;zfirst=10**9;names=collections.Counter()
-        for i in txt:
-            base=os.path.splitext(os.path.basename(i.filename))[0];m=re.fullmatch(r'\s*(PE|CE)\s*(\d+(?:\.\d+)?)\s*',base,re.I)
-            S=Series(base).parse(Z.read(i).decode('utf-8','replace'))
+        found,(Zl,mem),notes=collect_members(Z)
+        depth=max((len(t) for _,_,t in found),default=0);layouts[depth]+=1
+        dirs=collections.Counter(os.path.dirname(i.filename) for _,i,_ in found);txt=found;oth=[]
+        C={};zlast=0;zfirst=10**9;names=collections.Counter();zstyles=collections.Counter()
+        nexp=collections.Counter();badnames=[];trails=collections.Counter(t for _,_,t in found)
+        for Zm,i,trail in txt:
+            base=os.path.splitext(os.path.basename(i.filename))[0];pn=parse_name(base)
+            S=Series(base).parse(Zm.read(i).decode('utf-8','replace'))
             for k in fmt_report(base,S):fmt_issues[k.split(',')[0].split(':')[0]]+=1
-            datefmts.update(S.datefmt)
+            datefmts.update(S.datefmt);fields[f'{y}-{mo:02d}'].update(S.nfields)
             if S.header:headers[S.header]+=1
             if S.nbad and len(fmt_examples)<5:fmt_examples.append(f'{dt.date(y,mo,1):%b %Y}/{i.filename}: '+'; '.join(f'line {a_}: {t!r}' for a_,t in S.bad[:2]))
-            if not m:names['unexpected file name']+=1;continue
-            cp,k=m.group(1).upper(),float(m.group(2));syms=list(S.symbols)
-            if syms and syms[0].replace(' ','').upper()!=f'{cp}{k:g}'.upper():names['symbol inside differs from file name']+=1
+            if not pn:names['unexpected file name']+=1;badnames.append(i.filename);continue
+            cp,k,nx,style=pn;styles[style]+=1;zstyles[style]+=1
+            if nx:nexp[nx]+=1
+            sp_=[parse_name(x) for x in S.symbols]
+            if any(q is None or q[:2]!=(cp,k) for q in sp_):names['symbol inside differs from file name']+=1
             if (cp,k) in C:names['two files for one contract']+=1
             C[(cp,k)]=S
             if S.n:zlast=max(zlast,int(S.day.max()));zfirst=min(zfirst,int(S.day.min()))
@@ -237,10 +292,10 @@ def main(argv=None):
             vol_v.append(S.v[np.isfinite(S.v)&(S.v>0)][:2000])
         if not C:
             ext=collections.Counter(os.path.splitext(i.filename)[1].lower() or '(none)' for i in mem)
-            say(f'  {dt.date(y,mo,1):%B %Y}: NO RECOGNISED OPTION FILES: {len(mem)} members, extensions {dict(ext)}, folders {dict(collections.Counter(os.path.dirname(i.filename) or "(top)" for i in mem).most_common(5))}')
+            say(f'  {dt.date(y,mo,1):%B %Y}: NO RECOGNISED OPTION FILES (path {notes}): {len(mem)} members, extensions {dict(ext)}, folders {dict(collections.Counter(os.path.dirname(i.filename) or "(top)" for i in mem).most_common(5))}')
             say('      member names: '+' | '.join(i.filename for i in mem[:12])+(' ...' if len(mem)>12 else ''))
             for i in [i for i in mem if i.file_size>0][:2]:
-                head=Z.read(i)[:400].decode('utf-8','replace').splitlines()[:3];say(f'      {i.filename}: '+' / '.join(repr(h[:100]) for h in head))
+                head=Zl.read(i)[:400].decode('utf-8','replace').splitlines()[:3];say(f'      {i.filename}: '+' / '.join(repr(h[:100]) for h in head))
             unrec.append(dict(month=f'{y}-{mo:02d}',members=len(mem),extensions=dict(ext),names=[i.filename for i in mem[:30]]))
             continue
         exp=zlast;lt=last_thursday(y,mo,tdays)
@@ -260,9 +315,14 @@ def main(argv=None):
         if dt.date.fromordinal(exp).month!=mo:flag.append('expiry month differs from the zip name')
         if early:flag.append(f'{len(early)} contracts end > 3 days before the others (e.g. {early[0]})')
         if len(dirs)>1 or list(dirs)!=['']:flag.append(f'folders inside: {dict(dirs)}')
-        if oth:flag.append(f'non-txt members: {oth[:3]}')
-        if names:flag.append(', '.join(f'{k} x{v}' for k,v in names.items()))
-        if layout!='flat':flag.append(layout)
+        if names:flag.append(', '.join(f'{k} x{v}' for k,v in names.items())+(f' (e.g. {badnames[:4]})' if badnames else ''))
+        if len(zstyles)>1:flag.append(f'file-name styles mixed: {dict(zstyles)}')
+        for nx,c in nexp.items():
+            if nx!=exp:flag.append(f'expiry in the file names {dfmt(nx)} (x{c}) differs from the last data day {dfmt(exp)}')
+        re_=name_range_end(next(iter(trails)) if trails else ())
+        if re_ is not None and re_!=exp:flag.append(f'range in the zip name ends {dfmt(re_)}, last data day {dfmt(exp)}')
+        if depth or notes:flag.append(f'depth {depth}: '+' | '.join(notes))
+        if len(fields[f'{y}-{mo:02d}'])>1 or 8 not in fields[f'{y}-{mo:02d}']:flag.append(f'fields per row {dict(fields[f"{y}-{mo:02d}"])}')
         # 9 parity: implied forward K + C - P near the money vs F1 at minute offsets
         res={}
         if fk:
@@ -303,13 +363,17 @@ def main(argv=None):
                 atm=round(v/100)*100;covr.append(tuple(all(atm+j*100 in cs for j in range(-L,L+1)) for L in (2,3,5)))
         med0=np.median(np.abs(res[0])) if res.get(0) else float('nan');medb=np.median(np.abs(res[bo])) if bo is not None else float('nan')
         zsum.append(dict(month=f'{y}-{mo:02d}',expiry=dfmt(exp),last_thursday=dfmt(lt),contracts=len(C),ce=ce,pe=pe,strikes=len(strikes),
-                         strike_min=strikes[0],strike_max=strikes[-1],steps=dict(steps),first_day=dfmt(zfirst),parity_abs_median_pts=None if math.isnan(med0) else round(float(med0),2),parity_best_offset=bo,flags=flag))
+                         strike_min=strikes[0],strike_max=strikes[-1],steps=dict(steps),first_day=dfmt(zfirst),parity_abs_median_pts=None if math.isnan(med0) else round(float(med0),2),parity_best_offset=bo,name_styles=dict(zstyles),zip_depth=depth,fields=dict(fields[f'{y}-{mo:02d}']),flags=flag))
         say(f'  {dt.date(y,mo,1):%b %Y}: expiry {dfmt(exp)} ({dt.date.fromordinal(exp):%a}), {ce} CE + {pe} PE, strikes {strikes[0]:g}-{strikes[-1]:g} steps {dict(steps)}, '
             f'data from {dfmt(zfirst)}; parity |K+C-P-F1| median {med0:.1f} pts at offset 0'+(f', {medb:.1f} at best offset {bo:+d}' if bo not in (None,0) else '')+('\n      ! '+'\n      ! '.join(flag) if flag else ''))
     # ---------------------------------------------------------------- summaries that need all data
     hdr('2b FORMAT (options)')
     say('  issues by kind (files): '+(', '.join(f'{k} x{v}' for k,v in fmt_issues.items()) if fmt_issues else 'none'))
-    say(f'  zip layouts: {layouts["nested"]} nested (CSV copy used), {len(items)-layouts["nested"]} flat; date formats in option rows: {dict(datefmts)}')
+    say(f'  zip layouts by depth of zips inside zips: {dict(sorted(layouts.items()))}; date formats in option rows: {dict(datefmts)}')
+    say(f'  file-name styles (files): {dict(styles)}')
+    fz=collections.defaultdict(list)
+    for m_,c_ in sorted(fields.items()):fz[tuple(sorted(c_))].append(m_)
+    say('  fields per row: '+'; '.join(f'{list(k)}: {v[0]}..{v[-1]} ({len(v)} zips)' for k,v in fz.items())+'   (8 = sym,date,time,o,h,l,c,v; 9 adds OI)')
     if headers:say('  header lines: '+'; '.join(f'{h!r} x{c}' for h,c in headers.most_common(3)))
     for e in fmt_examples:say('   '+e)
     hdr('3b TIME CONVENTION (options, all contracts pooled)')
