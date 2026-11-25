@@ -194,7 +194,7 @@ def main(argv=None):
     hdr('7  OPTION CONTRACTS (per zip)')
     tdays=set(PDs.get('spot',{}))
     rows=[];optdays=collections.Counter();opt_first=collections.Counter();opt_last=collections.Counter();opt_nb=collections.Counter()
-    fmt_issues=collections.Counter();fmt_examples=[];vol=[];parity=[];vol_v=[];zsum=[]
+    fmt_issues=collections.Counter();fmt_examples=[];vol=[];parity=[];vol_v=[];zsum=[];unrec=[];lagpairs=collections.defaultdict(list);covr=[]
     F1=fut_all.get('NIFTY_F1');fk=None
     if F1 is not None:fk=dict(zip(F1.key().tolist(),F1.c.tolist()))
     SPk=dict(zip(spot_all.key().tolist(),spot_all.c.tolist())) if spot_all is not None else {}
@@ -219,7 +219,14 @@ def main(argv=None):
             pd_=per_day(S)
             for d_,(f_,l_,nb,du) in pd_.items():optdays[d_]+=1;opt_first[f_]+=1;opt_last[l_]+=1
             vol_v.append(S.v[np.isfinite(S.v)&(S.v>0)][:2000])
-        if not C:say(f'  {dt.date(y,mo,1):%B %Y}: no option files');continue
+        if not C:
+            ext=collections.Counter(os.path.splitext(i.filename)[1].lower() or '(none)' for i in mem)
+            say(f'  {dt.date(y,mo,1):%B %Y}: NO RECOGNISED OPTION FILES: {len(mem)} members, extensions {dict(ext)}, folders {dict(collections.Counter(os.path.dirname(i.filename) or "(top)" for i in mem).most_common(5))}')
+            say('      member names: '+' | '.join(i.filename for i in mem[:12])+(' ...' if len(mem)>12 else ''))
+            for i in [i for i in mem if i.file_size>0][:2]:
+                head=Z.read(i)[:400].decode('utf-8','replace').splitlines()[:3];say(f'      {i.filename}: '+' / '.join(repr(h[:100]) for h in head))
+            unrec.append(dict(month=f'{y}-{mo:02d}',members=len(mem),extensions=dict(ext),names=[i.filename for i in mem[:30]]))
+            continue
         exp=zlast;lt=last_thursday(y,mo,tdays)
         strikes=sorted({k for _,k in C});steps=collections.Counter(np.diff(strikes).round(2).tolist()) if len(strikes)>1 else {}
         ends=collections.Counter();early=[];after=0;cover=[]
@@ -258,6 +265,25 @@ def main(argv=None):
                         if c_ is not None and p_ is not None and f_ is not None:res.setdefault(off,[]).append(k+c_-p_-f_)
             for off,v in res.items():parity.append((off,v))
         bo=min(res,key=lambda o:np.median(np.abs(res[o]))) if res else None
+        if fk and ks:
+            for d_ in sample:
+                f0=fk.get(d_*1440+12*60)
+                if f0 is None:continue
+                k=min(ks,key=lambda x:abs(x-f0));ck=cache[k][0] if k in cache else dict(zip(C[('CE',k)].key().tolist(),C[('CE',k)].c.tolist()))
+                for mi in range(9*60+20,15*60+25):
+                    q=d_*1440+mi;c1,c0=ck.get(q),ck.get(q-1)
+                    if c1 is None or c0 is None or c1==c0:continue
+                    for off in (-2,-1,0,1,2):
+                        f1_,f0_=fk.get(q+off),fk.get(q+off-1)
+                        if f1_ is not None and f0_ is not None:lagpairs[off].append((c1-c0,f1_-f0_))
+        if SPk:
+            cs=set(strikes)
+            dclose={}
+            for k_,v in SPk.items():
+                d_=k_//1440
+                if zfirst<=d_<=exp and (d_ not in dclose or k_>dclose[d_][0]):dclose[d_]=(k_,v)
+            for d_,(_,v) in dclose.items():
+                atm=round(v/100)*100;covr.append(tuple(all(atm+j*100 in cs for j in range(-L,L+1)) for L in (2,3,5)))
         med0=np.median(np.abs(res[0])) if res.get(0) else float('nan');medb=np.median(np.abs(res[bo])) if bo is not None else float('nan')
         zsum.append(dict(month=f'{y}-{mo:02d}',expiry=dfmt(exp),last_thursday=dfmt(lt),contracts=len(C),ce=ce,pe=pe,strikes=len(strikes),
                          strike_min=strikes[0],strike_max=strikes[-1],steps=dict(steps),first_day=dfmt(zfirst),parity_abs_median_pts=None if math.isnan(med0) else round(float(med0),2),parity_best_offset=bo,flags=flag))
@@ -291,6 +317,9 @@ def main(argv=None):
     if spot_all is not None and F1 is not None:
         common=sorted(set(SPk)&set(fk))[::7];b=np.array([fk[k]-SPk[k] for k in common])
         say(f'   F1 - spot basis (points, every 7th common minute): median {np.median(b):.1f}, 1%..99% {np.percentile(b,1):.1f} .. {np.percentile(b,99):.1f}, min {b.min():.1f}, max {b.max():.1f}')
+    if covr:
+        cv=np.array(covr);say(f'   strike coverage (contract-days, ATM = spot close to the nearest 100): ATM +-200 listed {100*cv[:,0].mean():.0f}%, +-300 {100*cv[:,1].mean():.0f}%, +-500 {100*cv[:,2].mean():.0f}% '
+                                 '(the strategies use levels 1-5 of 100 points below NIFTY 12,000)')
     hdr('6  VOLUME / OI COLUMNS')
     if spot_all is not None:vol_report('spot',spot_all,a.lot)
     for s,S in fut_all.items():vol_report(f'futures {s}',S,a.lot)
@@ -309,8 +338,8 @@ def main(argv=None):
                 f=dayclose(fk,d);s=dayclose(SPk,d);return None if f is None or s is None else f-s
             bp,be,bn=basis(prevd),basis(e),basis(nxt)
             fmtb=lambda x:'   -  ' if x is None else f'{x:6.1f}'
-            verdict=('F1 = expiring contract on expiry day, rolls the next day' if be is not None and abs(be)<5 and bn is not None and bn>be+10
-                     else 'F1 had already rolled before the expiry close' if be is not None and be>15 else 'unclear')
+            verdict=('F1 = expiring contract through the expiry close (settles to spot), next contract from the next day' if be is not None and abs(be)<3
+                     else 'F1 had already rolled before the expiry close' if be is not None and abs(be)>=3 else 'no data')
             lines.append(f'  expiry {dfmt(e)}: basis at close day before {fmtb(bp)}, expiry day {fmtb(be)}, next day {fmtb(bn)}  -> {verdict}')
         for l_ in lines:say(l_)
         R['roll']=lines
@@ -323,6 +352,12 @@ def main(argv=None):
             v=np.array(agg[off]);say(f'     F1 at option minute {off:+d}: median {np.median(v):+.2f} pts, median |.| {np.median(np.abs(v)):.2f}, n {len(v)}')
         best=min(agg,key=lambda o:np.median(np.abs(agg[o])));say(f'  -> best fit at offset {best:+d}'+(' (option and futures labels mean the same minute)' if best==0 else ' (labels are shifted: see decisions)'))
         R['parity_best_offset']=int(best)
+    if lagpairs:
+        say('  ATM call minute change vs F1 minute change (same expiry), correlation by F1 offset:')
+        cc={}
+        for off in sorted(lagpairs):
+            a_=np.array(lagpairs[off]);cc[off]=float(np.corrcoef(a_[:,0],a_[:,1])[0,1]);say(f'     F1 at option minute {off:+d}: correlation {cc[off]:.3f} (n {len(a_):,})')
+        bo=max(cc,key=cc.get);say(f'  -> highest at offset {bo:+d}'+(' : option label t = futures label t+1 (options label the bar START, spot/futures the bar END)' if bo==1 else ''));R['option_futures_lag']=bo
     if spot_all is not None and F1 is not None:
         common=sorted(set(SPk)&set(fk));ks=np.array(common);sv=np.array([SPk[k] for k in common]);fv=np.array([fk[k] for k in common])
         same=np.diff(ks)==1;rs=np.diff(sv)/sv[:-1];rf=np.diff(fv)/fv[:-1]
@@ -356,7 +391,7 @@ def main(argv=None):
     with open(os.path.join(a.out,'contracts.csv'),'w') as fh:
         if rows:
             import csv as _c;w=_c.DictWriter(fh,list(rows[0]));w.writeheader();w.writerows(rows)
-    R['zips']=zsum
+    R['zips']=zsum;R['unrecognised_zips']=unrec
     with open(os.path.join(a.out,'survey.json'),'w') as fh:json.dump(R,fh,indent=1,default=str)
     say(f'\n-> {a.out}/survey.json, contracts.csv ({time.time()-t0:.0f}s)')
 
