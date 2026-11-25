@@ -28,6 +28,7 @@ import numpy as np
 MONTHS={m:i for i,m in enumerate(['january','february','march','april','may','june','july','august','september','october','november','december'],1)}
 OPEN,CLOSE=9*60+15,15*60+30
 ROW=re.compile(r'^\s*([^,]+),(\d{4})[/-](\d{2})[/-](\d{2}),(\d{1,2}):(\d{2})(?::(\d{2}))?,(.*)$')
+ROW_DMY=re.compile(r'^\s*([^,]+),(\d{1,2})([/-])(\d{1,2})[/-](\d{4}),(\d{1,2}):(\d{2})(?::(\d{2}))?,(.*)$')     # day-first dates (checked by the expiry rule)
 
 def say(*a):print(*a,flush=True)
 def hdr(t):say(f'\n{"="*100}\n{t}\n{"="*100}')
@@ -38,7 +39,7 @@ class Series:
     """Parsed rows of one file: arrays day (ordinal), minute (of day), o h l c v oi; plus format statistics."""
     def __init__(self,name):
         self.name=name;self.nfields=collections.Counter();self.symbols=collections.Counter();self.bad=[];self.nbad=0
-        self.blank=0;self.header=None;self.bom=False;self.crlf=False;self.unsorted=0;self.seconds=0
+        self.blank=0;self.header=None;self.bom=False;self.crlf=False;self.unsorted=0;self.seconds=0;self.datefmt=collections.Counter()
     def parse(self,text):
         if text.startswith('﻿'):self.bom=True;text=text[1:]
         self.crlf='\r\n' in text[:10000]
@@ -46,12 +47,17 @@ class Series:
         for i,line in enumerate(text.splitlines()):
             if not line.strip():self.blank+=1;continue
             m=ROW.match(line)
+            if m:self.datefmt['YYYY/MM/DD']+=1
+            else:
+                m2=ROW_DMY.match(line)
+                if m2:
+                    sym,d,sep,mo,y,hh,mm,ss,rest=m2.groups();m=(sym,y,mo.zfill(2),d.zfill(2),hh,mm,ss,rest);self.datefmt[f'DD{sep}MM{sep}YYYY']+=1
             if not m:
                 if i==0 and not any(ch.isdigit() for ch in line.split(',')[1:2][0] if line.count(',')):self.header=line[:120];continue
                 self.nbad+=1
                 if len(self.bad)<5:self.bad.append((i+1,line[:120]))
                 continue
-            sym,y,mo,d,hh,mm,ss,rest=m.groups();f=rest.split(',');self.nfields[len(f)+3]+=1;self.symbols[sym.strip()]+=1
+            sym,y,mo,d,hh,mm,ss,rest=m if isinstance(m,tuple) else m.groups();f=rest.split(',');self.nfields[len(f)+3]+=1;self.symbols[sym.strip()]+=1
             if ss and ss!='00':self.seconds+=1
             try:
                 day=dt.date(int(y),int(mo),int(d)).toordinal();vals=[float(x) if x.strip() else math.nan for x in f[:6]]
@@ -195,6 +201,7 @@ def main(argv=None):
     tdays=set(PDs.get('spot',{}))
     rows=[];optdays=collections.Counter();opt_first=collections.Counter();opt_last=collections.Counter();opt_nb=collections.Counter()
     fmt_issues=collections.Counter();fmt_examples=[];vol=[];parity=[];vol_v=[];zsum=[];unrec=[];lagpairs=collections.defaultdict(list);covr=[]
+    layouts=collections.Counter();datefmts=collections.Counter();headers=collections.Counter()
     F1=fut_all.get('NIFTY_F1');fk=None
     if F1 is not None:fk=dict(zip(F1.key().tolist(),F1.c.tolist()))
     SPk=dict(zip(spot_all.key().tolist(),spot_all.c.tolist())) if spot_all is not None else {}
@@ -202,13 +209,22 @@ def main(argv=None):
     for (y,mo),zp in items:
         try:Z=zipfile.ZipFile(zp)
         except zipfile.BadZipFile:say(f'  {dt.date(y,mo,1):%B %Y}: BAD ZIP');continue
+        inner=[i for i in Z.infolist() if i.filename.lower().endswith('.zip')];layout='flat'
+        if inner:                                                     # zip of zips: the (CSV) one (user: ignore the TXT copy)
+            pick=[i for i in inner if 'csv' in os.path.basename(i.filename).lower()] or [i for i in inner if 'txt' not in os.path.basename(i.filename).lower()] or inner
+            layout=f'nested -> {pick[0].filename}'+(f' (also {[i.filename for i in inner if i is not pick[0]]})' if len(inner)>1 else '')
+            try:Z=zipfile.ZipFile(io.BytesIO(Z.read(pick[0])))
+            except zipfile.BadZipFile:say(f'  {dt.date(y,mo,1):%B %Y}: BAD INNER ZIP {pick[0].filename}');continue
+            layouts['nested']+=1
         mem=[i for i in Z.infolist() if not i.is_dir()];dirs=collections.Counter(os.path.dirname(i.filename) for i in mem)
-        txt=[i for i in mem if i.filename.lower().endswith('.txt')];oth=[i.filename for i in mem if not i.filename.lower().endswith('.txt')]
+        txt=[i for i in mem if i.filename.lower().endswith(('.txt','.csv'))];oth=[i.filename for i in mem if not i.filename.lower().endswith(('.txt','.csv'))]
         C={};zlast=0;zfirst=10**9;names=collections.Counter()
         for i in txt:
-            base=os.path.basename(i.filename)[:-4];m=re.fullmatch(r'\s*(PE|CE)\s*(\d+(?:\.\d+)?)\s*',base,re.I)
+            base=os.path.splitext(os.path.basename(i.filename))[0];m=re.fullmatch(r'\s*(PE|CE)\s*(\d+(?:\.\d+)?)\s*',base,re.I)
             S=Series(base).parse(Z.read(i).decode('utf-8','replace'))
             for k in fmt_report(base,S):fmt_issues[k.split(',')[0].split(':')[0]]+=1
+            datefmts.update(S.datefmt)
+            if S.header:headers[S.header]+=1
             if S.nbad and len(fmt_examples)<5:fmt_examples.append(f'{dt.date(y,mo,1):%b %Y}/{i.filename}: '+'; '.join(f'line {a_}: {t!r}' for a_,t in S.bad[:2]))
             if not m:names['unexpected file name']+=1;continue
             cp,k=m.group(1).upper(),float(m.group(2));syms=list(S.symbols)
@@ -246,6 +262,7 @@ def main(argv=None):
         if len(dirs)>1 or list(dirs)!=['']:flag.append(f'folders inside: {dict(dirs)}')
         if oth:flag.append(f'non-txt members: {oth[:3]}')
         if names:flag.append(', '.join(f'{k} x{v}' for k,v in names.items()))
+        if layout!='flat':flag.append(layout)
         # 9 parity: implied forward K + C - P near the money vs F1 at minute offsets
         res={}
         if fk:
@@ -292,6 +309,8 @@ def main(argv=None):
     # ---------------------------------------------------------------- summaries that need all data
     hdr('2b FORMAT (options)')
     say('  issues by kind (files): '+(', '.join(f'{k} x{v}' for k,v in fmt_issues.items()) if fmt_issues else 'none'))
+    say(f'  zip layouts: {layouts["nested"]} nested (CSV copy used), {len(items)-layouts["nested"]} flat; date formats in option rows: {dict(datefmts)}')
+    if headers:say('  header lines: '+'; '.join(f'{h!r} x{c}' for h,c in headers.most_common(3)))
     for e in fmt_examples:say('   '+e)
     hdr('3b TIME CONVENTION (options, all contracts pooled)')
     say('   first minute of a contract-day: '+', '.join(f'{hm(k)} x{c}' for k,c in opt_first.most_common(6)))
