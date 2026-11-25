@@ -1,0 +1,4 @@
+# Hand overrides for nifty-data-import-2017-2020 --overrides (applied after the attribution copies are left out).
+# zip = the option zip's month (YYYY-MM); cp CE / PE / *; strike a number or *; days inclusive; action drop | expiry
+# (expiry: store those rows under this expiry instead of the zip's). Fill from the attribute_2017_2020 findings.
+zip,cp,strike,day_from,day_to,action,expiry,reason

@@ -112,6 +112,17 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.18 (data): the 2017-2020 vendor files into market_data
+
+| Change | What |
+|---|---|
+| `nifty-data-import-2017-2020` (`nifty_iv.data.import_2017_2020`) | Loads spot, NIFTY_F1 and the monthly option zips as dataset `nifty_2017_2020`. Bar start times (spot / futures labels moved back one minute), regular session 09:15-15:29 only, option expiry from the zip (rule-checked against the last data day and names), futures expiry per bar = current monthly, spot volume NULL (tick count), option OI where present. File-days the attribution check shows to copy the previous zip are left out; `--overrides` for hand fixes. One transaction per source file with its `import_files` row: resumable, refuses changed units unless `--reload`, advisory lock, `--dry-run`, `--verify`. No candles are filled in. |
+| `nifty_iv.data.vendor_2017_2020` | Shared readers: zips of zips (CSV copy preferred), the three file-name styles, strict row parsing, expiry calendar. |
+| `scripts/survey_2017_2020.py`, `check_2017_2020.py`, `attribute_2017_2020.py` | The three pre-import passes (inventory and conventions; overlaps, rolls, ladder, calendar, database; per file-day expiry attribution). |
+| `config/nse_holidays_2017_2020.txt` | NSE holidays 2017-2020 (Muhurat days as holidays). Kept apart from `nse_holidays.txt` until a run uses 2017-2020: changing that file changes the grid signature. |
+| `config/import_2017_2020_overrides.csv` | Empty template for hand overrides. |
+| `tests/test_import_2017_2020.py` | Names, calendar, parsing, session / shift, duplicates, nested zips, copies, overrides, expiry check; PostgreSQL: an interrupted unit leaves nothing, a rerun completes it (NIFTY_TEST_PG=1). |
+
 ## Finding that drove it
 On the real V4.9.6 grid the best result, bear naked level -4 (call 800 points in the money), was a fill-selection artefact. For the same
 config and exit rule, ATM trades on the 11 signals where level -4 also filled made +1,779 points (100% winners, no zone-flip losses);

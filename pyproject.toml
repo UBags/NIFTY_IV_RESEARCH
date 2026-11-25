@@ -18,6 +18,7 @@ test = ["pytest"]
 [project.scripts]
 nifty-data-explain-month = "nifty_iv.data.explain_month:main"
 nifty-data-import-postgres = "nifty_iv.data.import_postgres:main"
+nifty-data-import-2017-2020 = "nifty_iv.data.import_2017_2020:main"
 nifty-data-inspect-parquet = "nifty_iv.data.inspect_parquet:main"
 nifty-data-migrate = "nifty_iv.data.migrate:main"
 nifty-data-research-cache = "nifty_iv.data.research_cache:main"
