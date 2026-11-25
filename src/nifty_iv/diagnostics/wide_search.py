@@ -117,6 +117,51 @@ def composite(v,labels,keep,yrs,c):
     ramp=hit*1. if c.get('ramp_from') is None else np.clip((cg-c['ramp_from'])/(c['target']-c['ramp_from']),0.,1.)
     return .4/np.maximum(rng,c['range_floor'])*hit+.4*7*ramp+.2*40*cg-2.8*(rng>c.get('range_cap',np.inf))
 
+# ------------------------------------------------------------------ V4.9.19 score (user, 2026-11-25)
+V4=dict(range_coef=10.,range_floor=.10,                                  # 10 / max(range of full-year returns, 0.10)
+        fy_cap=.40,fy_pen=40.,hy_cap=.30,hy_pen=30.,                     # - 40 if that range > 0.40, - 30 if the half-year range > 0.30
+        neg_half=40.,neg_quarter=10.,                                    # - 40 per negative half-year, - 10 per negative quarter
+        steps=((.25,15.),(.30,15.),(.35,15.)),                           # + 15 at each CAGR step
+        slopes=(.20,.25,.30,.35),slope=100.,cagr_cap=.50,                # + 100 x (CAGR - t) for each t, CAGR capped at 0.50
+        dd=((.075,10.),(.10,10.),(.125,15.),(.15,15.),(.175,20.)),       # - each weight whose drawdown step is exceeded
+        tl=((.03,3.),(.05,6.),(.065,9.),(.08,20.),(.095,30.)))           # - each weight whose worst-trade-loss step is exceeded
+
+def full_years(per,exclude=None):
+    """Complete calendar years of the train window (1 Jan to 31 Dec inside [lo, mid)), without the excluded year."""
+    return [y for y in per.years if f'{y}-01-01'>=per.lo and f'{int(y)+1}-01-01'<=per.mid and y!=exclude]
+
+def cagr_ex_best(H,labels,keep,yrs,fy,tax):
+    """Post-tax CAGR of half-year arrays H (..., periods) on the kept periods with each element's best full year (highest pre-tax
+    return among fy) also left out (one year less), and the full-year returns (..., len(fy))."""
+    H=np.asarray(H,float);lab=np.array([p[:4] for p in labels])
+    FY=np.stack([H[...,keep&(lab==y)].sum(-1) for y in fy],-1)
+    best=FY.argmax(-1);out=np.empty(H.shape[:-1])
+    for j,y in enumerate(fy):
+        m=best==j
+        if m.any():out[m]=post_tax_cagr(H[m],labels,keep&(lab!=y),max(yrs-1.,1/365.25),tax)
+    return out,FY
+
+def score_v4(H,Q,ph,pq,mdd,tl,tax,exclude=None,c=V4):
+    """The user's V4.9.19 score of strategies or pairs. H: train half-year returns (..., len(ph.train)); Q: train quarter returns
+    (..., len(pq.train)); mdd: train account drawdown, tl: worst open trade loss (both positive shares of capital, (...)); exclude: a
+    held-out train year (left out of every term; mdd and tl must then be the ones without that year's trades). Returns pre-tax
+    shares of capital throughout except CAGR (post-tax, `tax`, loss carry-forward), as a dict of the score and its parts:
+      score = 10/max(Rfy, .10) - 40[Rfy > .40] - 30[Rhy > .30] - 40 x negative halves - 10 x negative quarters
+              + 15([C > .25] + [C > .30] + [C > .35]) + 100 x sum over t in (.20, .25, .30, .35) of (C - t)
+              - (10[MDD > .075] + 10[MDD > .10] + 15[MDD > .125] + 15[MDD > .15] + 20[MDD > .175])
+              - (3[TL > .03] + 6[TL > .05] + 9[TL > .065] + 20[TL > .08] + 30[TL > .095])
+    Rfy = range (max - min) of the complete train years' returns; Rhy = range of the kept half-years (a partial first half included,
+    as the composite); C = min(post-tax CAGR with the best complete year also left out, .50)."""
+    H=np.asarray(H,float);Q=np.asarray(Q,float);mdd=np.asarray(mdd,float);tl=np.asarray(tl,float)
+    kh,yh=fold(ph,exclude);kq,_=fold(pq,exclude);fy=full_years(ph,exclude)
+    if len(fy)<2:raise ValueError(f'the score needs at least 2 complete train years ({fy})')
+    cx,FY=cagr_ex_best(H,ph.train,kh,yh,fy,tax);C=np.minimum(cx,c['cagr_cap'])
+    rfy=FY.max(-1)-FY.min(-1);Hk=H[...,kh];rhy=Hk.max(-1)-Hk.min(-1);nh=(Hk<0).sum(-1);nq=(Q[...,kq]<0).sum(-1)
+    stab=c['range_coef']/np.maximum(rfy,c['range_floor'])-c['fy_pen']*(rfy>c['fy_cap'])-c['hy_pen']*(rhy>c['hy_cap'])-c['neg_half']*nh-c['neg_quarter']*nq
+    ret=sum(w*(C>t) for t,w in c['steps'])+c['slope']*sum(C-t for t in c['slopes'])
+    risk=sum(w*(mdd>t) for t,w in c['dd'])+sum(w*(tl>t) for t,w in c['tl'])
+    return dict(score=stab+ret-risk,cagr_ex_best=cx,range_fy=rfy,range_hy=rhy,neg_halves=nh,neg_quarters=nq,stability=stab,return_=ret,risk=risk)
+
 def fold(per,exclude=None):
     """(kept-label mask, years) of the train periods without the excluded year, as vec_stats counts them."""
     keep=np.array([not (exclude and p[:4]==exclude) for p in per.train])

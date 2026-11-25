@@ -66,3 +66,42 @@ class PairPicker(unittest.TestCase):
         self.assertEqual(self.run_pick(rows,'--min-quarter','.05','--quarters',qo,'--include-oos','quarter')[0]['green_config'],'B')
 
 if __name__=='__main__':unittest.main()
+
+class PairPickerV4(unittest.TestCase):
+    """--rank v4: pair drawdown from summed daily equity, worst trade of the worse leg, held-out year's risk columns in --loyo."""
+    Q=['2021Q3','2021Q4']+[f'{y}Q{q}' for y in range(2022,2026) for q in range(1,5)];Y=['2021','2022','2023','2024','2025']
+    def files(self,rows,risk):
+        import numpy as np
+        d=tempfile.mkdtemp();c=os.path.join(d,'c.csv');q=os.path.join(d,'q.csv');z=os.path.join(d,'r.npz')
+        with open(c,'w',newline='') as fh:w=csv.DictWriter(fh,list(rows[0]));w.writeheader();w.writerows(rows)
+        Qr=[]
+        for r in rows:
+            x={k:r[k] for k in ('side','structure','level','config','profit','stop','trades')};x.update({f'train_{p}':.02 for p in self.Q});x.update({'oos_2026Q1':0,'oos_2026Q2':0});Qr.append(x)
+        with open(q,'w',newline='') as fh:w=csv.DictWriter(fh,list(Qr[0]));w.writeheader();w.writerows(Qr)
+        keys=['|'.join(str(x) for x in pp.ws.strategy_key(r)) for r in rows]
+        np.savez(z,keys=np.array(keys),years=np.array(self.Y),days=np.arange(10),worst=np.array([risk[r['config']][0] for r in rows]),
+                 equity=np.array([risk[r['config']][1] for r in rows],np.float32))
+        return c,q,z,os.path.join(d,'p.csv')
+    def test_drawdown_of_the_sum_and_loyo(self):
+        import numpy as np,io,contextlib
+        up=np.linspace(0,.3,10);dip=up.copy();dip[4:]-=.15                 # dip: 15% drawdown alone
+        hedge=np.zeros(10);hedge[4:]+=.15                                   # offsets the dip exactly
+        F=lambda e,w=-.02:(np.full(6,w),np.stack([e]*6))
+        rows=[row('bull','A','s',[.2]*9),row('bull','B','s',[.21]*9),row('bear','X','s',[.05]*9),row('bear','Y','s',[.05]*9)]
+        risk={'A':F(dip),'B':F(up+.0,-.09),'X':F(hedge),'Y':F(np.zeros(10))}
+        c,q,z,o=self.files(rows,risk)
+        buf=io.StringIO()
+        with contextlib.redirect_stdout(buf):pp.main(['--candidates',c,'--out',o,'--quarters',q,'--risk',z,'--rank','v4','--top','1'])
+        P=list(csv.DictReader(open(o)))
+        self.assertEqual((P[0]['green_config'],P[0]['red_config']),('A','X'))   # A+X: the hedge removes A's drawdown; B has a 9% trade
+        self.assertAlmostEqual(float(P[0]['v4_mdd']),0.,places=6);self.assertAlmostEqual(float(P[0]['v4_trade_loss']),.02,places=6)
+        self.assertIn('v4 ',buf.getvalue())
+        with self.assertRaises(SystemExit):pp.main(['--candidates',c,'--out',o,'--quarters',q,'--rank','v4'])
+        wB=np.full(6,-.09);wB[1+self.Y.index('2023')]=-.02                 # without 2023's trades B's worst trade is 2%
+        eA=np.stack([dip]*6);eX=np.stack([np.zeros(10)]*6);eX[0]=hedge     # the hedge only exists with every year in
+        risk={'A':(np.full(6,-.02),eA),'B':(wB,np.stack([up]*6)),'X':(np.full(6,-.02),eX),'Y':(np.full(6,-.02),np.stack([np.zeros(10)]*6))}
+        c,q,z,o=self.files(rows,risk);buf=io.StringIO()
+        with contextlib.redirect_stdout(buf):pp.main(['--candidates',c,'--out',o,'--quarters',q,'--risk',z,'--rank','v4','--top','1','--loyo'])
+        t=buf.getvalue()
+        self.assertIn('  2023: 26/26 ',t)    # without 2023: B's worst trade is 2% and the hedge is gone (A+X 15% drawdown): B is picked
+        self.assertIn('  2022: 25/25 ',t)    # without 2022: B's 9% trade (38) costs more than A's 15% drawdown (35): A is picked

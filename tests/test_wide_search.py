@@ -227,3 +227,36 @@ class SpeedV4917(Fixture):
         rows=lambda cf:sorted((r['profit'],r['stop'],r['train'],r['oos'],r['trades'],r['worst_trade'],r['scores']) for r in res['rows'] if r['config']==cf)
         self.assertTrue(rows('zone_only_tw2'));self.assertEqual(rows('zone_only_tw2'),rows('N3_k0.5_m8_j0.25_tw2'))
         self.assertIn('kernel',res['phases'])
+
+class ScoreV4919(unittest.TestCase):
+    """User score (2026-11-25): stability, capped CAGR without the best full year, drawdown and trade-loss steps, held-out year."""
+    ph=ws.Periods('2021-09-01','2026-01-01','2026-07-01','half');pq=ws.Periods('2021-09-01','2026-01-01','2026-07-01','quarter')
+    def s(self,H,Q=None,mdd=0.,tl=0.,exclude=None):
+        H=np.atleast_2d(np.asarray(H,float));Q=np.full((len(H),len(self.pq.train)),.01) if Q is None else np.atleast_2d(np.asarray(Q,float))
+        return {k:v[0] for k,v in ws.score_v4(H,Q,self.ph,self.pq,np.full(len(H),mdd),np.full(len(H),tl),.35,exclude).items()}
+    def test_full_years(self):
+        self.assertEqual(ws.full_years(self.ph),['2022','2023','2024','2025']);self.assertEqual(ws.full_years(self.ph,'2024'),['2022','2023','2025'])
+    def test_parts_by_hand(self):
+        H=[.03,.30,.30,.02,.02,.05,.05,.10,.10]                   # full years .60 .04 .10 .20 (best 2022)
+        r=self.s(H,mdd=.12,tl=.09)
+        self.assertAlmostEqual(r['range_fy'],.56);self.assertAlmostEqual(r['range_hy'],.28)
+        keep=np.array([p[:4]!='2022' for p in self.ph.train]);c=float(ws.post_tax_cagr(np.array(H),self.ph.train,keep,ws.fold(self.ph)[1]-1,.35))
+        self.assertAlmostEqual(r['cagr_ex_best'],c)
+        self.assertAlmostEqual(r['stability'],10/.56-40);self.assertEqual(r['risk'],10+10+3+6+9+20)
+        self.assertAlmostEqual(r['return_'],100*(4*c-1.1)+15*(c>.25)+15*(c>.30)+15*(c>.35))
+        self.assertAlmostEqual(r['score'],r['stability']+r['return_']-r['risk'])
+    def test_negatives_floor_and_cap(self):
+        H=[.2]*9;Q=[.1]*18;Q[3]=-.01
+        r=self.s(H,Q);self.assertEqual(r['neg_quarters'],1);self.assertAlmostEqual(r['stability'],100-10)   # range 0 -> floor .10
+        r=self.s([.2]*8+[-.01]);self.assertEqual(r['neg_halves'],1)
+        big=self.s([2.]*9);self.assertGreater(big['cagr_ex_best'],.5);self.assertAlmostEqual(big['return_'],45+100*(4*.5-1.1))
+    def test_one_great_year_loses_its_credit(self):
+        steady=self.s([.25]*9);spike=self.s([.25,1.5,1.5]+[.0]*6)
+        self.assertLess(spike['cagr_ex_best'],.06);   # only the partial 2021 (+25%) and 2023-25 (0) remain
+        self.assertGreater(steady['score'],spike['score'])
+    def test_held_out_year_is_ignored(self):
+        H=[.2]*9;H2=list(H);H2[5]=H2[6]=-.5                       # 2024 bad
+        self.assertLess(self.s(H2)['score'],self.s(H)['score'])
+        self.assertAlmostEqual(self.s(H2,exclude='2024')['score'],self.s(H,exclude='2024')['score'])
+        with self.assertRaises(ValueError):ws.score_v4(np.zeros((1,3)),np.zeros((1,6)),ws.Periods('2024-07-01','2026-01-01','2026-07-01','half'),
+                                                       ws.Periods('2024-07-01','2026-01-01','2026-07-01','quarter'),np.zeros(1),np.zeros(1),.35,'2025')

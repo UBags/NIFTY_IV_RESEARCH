@@ -112,6 +112,28 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.19: the user's v4 score (pair ranking)
+
+Score (user, 2026-11-25), `wide_search.score_v4`, on train data only (2026H1 stays a check):
+
+    10/max(Rfy, .10) - 40[Rfy > .40] - 30[Rhy > .30] - 40 x negative halves - 10 x negative quarters
+    + 15([C > .25] + [C > .30] + [C > .35]) + 100 x ((C - .20) + (C - .25) + (C - .30) + (C - .35))
+    - (10[MDD > .075] + 10[MDD > .10] + 15[MDD > .125] + 15[MDD > .15] + 20[MDD > .175])
+    - (3[TL > .03] + 6[TL > .05] + 9[TL > .065] + 20[TL > .08] + 30[TL > .095])
+
+Rfy = range of the complete train years' pre-tax returns (2022-2025); Rhy = range of the train half-years (partial 2021H2 included, as the
+composite); negatives counted on train halves and quarters; C = min(post-tax CAGR with the best complete year also left out, 0.50)
+(35% tax, loss carry-forward); MDD = train account drawdown (daily mark-to-market); TL = worst open trade loss; shares of 25 lakh.
+
+| Change | What |
+|---|---|
+| `wide_search.score_v4`, `V4`, `full_years`, `cagr_ex_best` | The score and its parts (stability, return, risk, CAGR without the best year, ranges, negative counts); a held-out year is left out of every term. |
+| `scripts/strategy_risk.py` | Per strategy of a candidates.csv: worst open trade loss and daily train equity, all years and with each train year's entries left out (`Engine.risk`, as the wide search's leave-one-year-out), into an npz; checked against the candidates' worst_trade / train_max_dd. |
+| `scripts/pair_picker.py --rank v4 --risk` | Ranks qualifying pairs by the score: halves and quarters summed, pair drawdown = drawdown of the legs' summed daily equity, pair worst trade = the worse leg (green and red positions never overlap). In `--loyo` the held-out year's pick uses the drawdown and worst trade without that year's trades. The hard filters (per-leg trade loss, drawdown, trades; pair CAGR floor, positive share, range cap) are unchanged. |
+| Tests | Score parts by hand, floor, cap, best-year removal, held-out year; pair drawdown of the sum, worse-leg trade, held-out risk columns. |
+
+Not changed: stage 1 of the wide search still screens with the composite (no drawdown in the stage-1 kernel); the pool is the same.
+
 ## V4.9.18 (engine): the 2017-2020 block in the zone pipeline
 
 The 2017-2020 data is a separate block: the database has no spot for January to mid-May 2021 (options from 7 May), so the 2017-2020

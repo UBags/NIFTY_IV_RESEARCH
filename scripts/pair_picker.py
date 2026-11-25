@@ -15,7 +15,10 @@ in time, so both can use the whole capital). A pair qualifies when
 The floors skip a partial first period (2021H2 = Sep-Dec, 2021Q3 = Sep only) unless --floor-partial. --include-oos applies the
 floors to the out-of-sample periods too (2026H1, 2026Q1-Q2): then 2026H1 is no longer out of sample.
 Qualifying pairs are ranked all-positive first (unless --no-prefer-all-positive), then by --rank (objective: the wide search's
-composite with the same --cagr-floor and --range-cap; or cagr; or worst-half). Pairs are taken greedily: a pair is skipped if either
+composite with the same --cagr-floor and --range-cap; or cagr; or worst-half; or v4: the user's V4.9.19 score, wide_search.score_v4,
+on the pair's halves, quarters, drawdown and worst trade; needs --quarters and --risk from scripts/strategy_risk.py. The pair's
+drawdown is that of the two legs' summed daily equity and its worst trade the worse leg's; in --loyo every term of a held-out year's
+pick leaves that year out, the drawdown and worst trade included). Pairs are taken greedily: a pair is skipped if either
 leg repeats a leg already taken, judged by --distinct:
   signal  (default) same side, structure, strike level and signal configuration (different exits of one signal count as the same)
   level   same side, structure and strike level
@@ -95,8 +98,21 @@ def funnel(G,B,VG,VB,okg,okb,per,keep,yrs,a,F):
             O=(GO[gi][:,None,:]+BO[bi][None,:,:]).min(-1);sel=m.copy();m&=O>x;print(f'  {"every out-of-sample "+name+" > "+f"{100*x:g}%":40s} {dist(m)}')
             if sel.any():print(f'      before this floor: worst out-of-sample {name}: median {100*np.median(O[sel]):.1f}%, best {100*O[sel].max():.1f}%')
 
+def pair_drawdown(EG,EB,chunk=64):
+    """(len(EG), len(EB)) drawdowns of every summed pair of daily equity rows (shares of capital)."""
+    out=np.empty((len(EG),len(EB)))
+    for s in range(0,len(EG),chunk):out[s:s+chunk]=ws.drawdown(EG[s:s+chunk,None,:].astype(float)+EB[None,:,:].astype(float))
+    return out
+
+def v4_parts(gi,bi,V,F,a,held):
+    """wide_search.score_v4 of the pairs (gi x bi) on the train halves V, train quarters, summed equity and the worse leg's trade."""
+    R=F['risk'];f=0 if held is None else 1+R['years'].index(held)
+    GT,BT,_,_,_,_=F['quarter'];Q=GT[gi][:,None,:]+BT[bi][None,:,:]
+    tl=np.maximum(-R['wg'][gi,f][:,None],-R['wb'][bi,f][None,:]);dd=pair_drawdown(R['eg'][gi,f],R['eb'][bi,f])
+    p=ws.score_v4(V,Q,F['per_half'],F['per_quarter'],dd,tl,a.tax,exclude=held);p['mdd']=dd;p['trade_loss']=tl;return p
+
 def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
-    """Greedy diverse pick on the halves in keep. Returns [(i, j, cagr, obj, positive share)]."""
+    """Greedy diverse pick on the halves in keep. Returns [(i, j, cagr, obj, positive share, v4 parts or {})]."""
     C=dict(tax=a.tax,target=a.cagr_floor,ramp_from=None,range_floor=a.range_floor,range_cap=a.range_cap)
     gi=np.flatnonzero(okg);bi=np.flatnonzero(okb)
     if not len(gi) or not len(bi):return []
@@ -106,13 +122,15 @@ def pick(G,B,VG,VB,okg,okb,per,keep,yrs,a,top,F=None,held=None):
     m=(cg>=a.cagr_floor)&(pos>=a.min_positive-1e-9)&(rng<=a.range_cap)
     if F is not None and (a.min_half is not None or a.min_quarter is not None):m&=floors_ok(gi,bi,F,a,held)
     if not m.any():return []
-    sc={'objective':ob,'cagr':cg,'worst-half':wh}[a.rank]
+    p4=v4_parts(gi,bi,V,F,a,held) if a.rank=='v4' else None
+    sc=p4['score'] if p4 is not None else {'objective':ob,'cagr':cg,'worst-half':wh}[a.rank]
     I,J=np.nonzero(m);tier=(pos[I,J]>=1-1e-9).astype(float) if a.prefer_all_positive else np.zeros(len(I))
     o=np.lexsort((-sc[I,J],-tier));usedg=set();usedb=set();out=[]
     for t in o:
         i,j=gi[I[t]],bi[J[t]];kg,kb=key(G[i],a.distinct),key(B[j],a.distinct)
         if kg in usedg or kb in usedb:continue
-        usedg.add(kg);usedb.add(kb);out.append((i,j,float(cg[I[t],J[t]]),float(ob[I[t],J[t]]),float(pos[I[t],J[t]])))
+        x={k:float(v[I[t],J[t]]) for k,v in p4.items()} if p4 is not None else {}
+        usedg.add(kg);usedb.add(kb);out.append((i,j,float(cg[I[t],J[t]]),float(ob[I[t],J[t]]),float(pos[I[t],J[t]]),x))
         if len(out)==top:break
     return out
 
@@ -124,7 +142,8 @@ def main(argv=None):
     ap.add_argument('--min-trades',type=int,default=15);ap.add_argument('--cagr-floor',type=float,default=.20)
     ap.add_argument('--min-positive',type=float,default=.85);ap.add_argument('--range-cap',type=float,default=.40)
     ap.add_argument('--range-floor',type=float,default=.05);ap.add_argument('--tax',type=float,default=.35)
-    ap.add_argument('--rank',choices=('objective','cagr','worst-half'),default='objective')
+    ap.add_argument('--rank',choices=('objective','cagr','worst-half','v4'),default='objective',help='objective (default), cagr, worst-half, or v4 (the V4.9.19 score; needs --quarters and --risk)')
+    ap.add_argument('--risk',help='scripts/strategy_risk.py output (npz) for --rank v4')
     ap.add_argument('--no-prefer-all-positive',dest='prefer_all_positive',action='store_false')
     ap.add_argument('--distinct',choices=('signal','level','rule'),default='signal');ap.add_argument('--top',type=int,default=5)
     ap.add_argument('--train-start',default='2021-09-01');ap.add_argument('--split',default='2026-01-01');ap.add_argument('--end',default='2026-07-01')
@@ -147,7 +166,8 @@ def main(argv=None):
     oh=[k for k in G[0] if k.startswith('oos_20')] if G else []
     F={'per_half':per,'half':(VG,VB,np.array([[float(r[k]) for k in oh] for r in G]).reshape(len(G),len(oh)),
                                 np.array([[float(r[k]) for k in oh] for r in B]).reshape(len(B),len(oh)),per.train,per.oos)}
-    if a.min_quarter is not None:
+    if a.rank=='v4' and not (a.quarters and a.risk):sys.exit('--rank v4 needs --quarters (scripts/strategy_periods.py) and --risk (scripts/strategy_risk.py)')
+    if a.min_quarter is not None or a.rank=='v4':
         if not a.quarters:sys.exit('--min-quarter needs --quarters (scripts/strategy_periods.py --period quarter)')
         Q=list(csv.DictReader(open(a.quarters)));pq=ws.Periods(a.train_start,a.split,a.end,'quarter')
         if not Q or any(f'train_{p}' not in Q[0] for p in pq.train) or any(f'oos_{p}' not in Q[0] for p in pq.oos):
@@ -164,6 +184,18 @@ def main(argv=None):
         F['per_quarter']=pq;F['quarter']=(qv(G,tc,0),qv(B,tc,1),qv(G,oc,0),qv(B,oc,1),pq.train,pq.oos)
         okg&=np.isfinite(F['quarter'][0]).all(1);okb&=np.isfinite(F['quarter'][1]).all(1)
         if sum(miss):print(f'  no quarter figures for {miss[0]} green and {miss[1]} red strategies: left out')
+    if a.rank=='v4':
+        Z=np.load(a.risk);ix={k:n for n,k in enumerate(Z['keys'])};yrs_r=[str(y) for y in Z['years']]
+        if yrs_r!=per.years:sys.exit(f'{a.risk} has train years {yrs_r}, not {per.years}: make it with the same --train-start/--split')
+        def rk(S):
+            n=np.array([ix.get('|'.join(str(x) for x in ws.strategy_key(r)),-1) for r in S]);has=n>=0;n=np.where(has,n,0)
+            return Z['worst'][n],Z['equity'][n],has
+        wgf,egf,hg=rk(G);wbf,ebf,hb=rk(B)
+        if (~hg).sum() or (~hb).sum():print(f'  no risk figures for {int((~hg).sum())} green and {int((~hb).sum())} red strategies: left out')
+        okg&=hg;okb&=hb;F['risk']=dict(wg=wgf,wb=wbf,eg=egf,eb=ebf,years=yrs_r)
+        print('ranking: v4 = 10/max(full-year range,.10) -40[>.40] -30[half range>.30] -40/negative half -10/negative quarter '
+              '+15 at CAGR .25/.30/.35 +100 x (C-.20, C-.25, C-.30, C-.35) - drawdown steps (.075..175) - trade-loss steps (.03..095); '
+              'C = post-tax CAGR without the best full year, capped at 50%')
     fl=[f'every half > {100*a.min_half:g}%' if a.min_half is not None else '',f'every quarter > {100*a.min_quarter:g}%' if a.min_quarter is not None else '']
     fl=' and '.join(x for x in fl if x)
     if fl:print(f"floors: {fl} ({'out-of-sample included for the '+a.include_oos+' floor'+('s' if a.include_oos=='both' else '')+': 2026H1 is no longer a test' if a.include_oos else 'train only'}"
@@ -174,15 +206,17 @@ def main(argv=None):
     nm=lambda r:f"{r['side']} {r['structure']} {int(float(r['level'])):+d} {r['config']} {r['profit']}/{r['stop']}"
     rows=[]
     print(f'\n{len(P)} pairs, distinct by {a.distinct}; halves {tr[0][6:]}..{tr[-1][6:]}, 2026H1 out of sample')
-    for n,(i,j,cg,ob,pos) in enumerate(P,1):
+    for n,(i,j,cg,ob,pos,x4) in enumerate(P,1):
         v=VG[i]+VB[j];o=og[i]+obb[j]
         print(f"{n}. obj {ob:5.2f} | post-tax CAGR {100*cg:5.1f}% | positive {round(pos*len(tr))}/{len(tr)} | worst half {100*v.min():5.1f}% range {100*(v.max()-v.min()):4.1f}% | 2026H1 {100*o:6.1f}%")
+        if x4:print(f"   v4 {x4['score']:6.1f} = stability {x4['stability']:6.1f} + return {x4['return_']:6.1f} - risk {x4['risk']:5.1f} | CAGR w/o best year {100*x4['cagr_ex_best']:5.1f}% | "
+                    f"full-year range {100*x4['range_fy']:4.1f}% | negative halves {int(x4['neg_halves'])}, quarters {int(x4['neg_quarters'])} | pair DD {100*x4['mdd']:4.1f}% | worst trade {100*x4['trade_loss']:4.1f}%")
         print(f"   G {nm(G[i])}  [worst trade {100*wg[i]:.1f}%, train DD {100*dg[i]:.1f}%, {int(ng[i])} trades]")
         print(f"   R {nm(B[j])}  [worst trade {100*wb[j]:.1f}%, train DD {100*db[j]:.1f}%, {int(nb[j])} trades]")
         print('   halves '+' '.join(f'{100*x:.0f}' for x in v)+f' | {oh[0][4:] if oh else ""} '+' '.join(f'{100*(F["half"][2][i][q]+F["half"][3][j][q]):.0f}' for q in range(len(oh))))
         if 'quarter' in F:
             GT,BT,GO,BO,pt,po=F['quarter'];print('   quarters '+' '.join(f'{100*x:.0f}' for x in GT[i]+BT[j])+' | oos '+' '.join(f'{100*x:.0f}' for x in GO[i]+BO[j]))
-        row=dict(rank=n,objective=round(ob,4),post_tax_cagr=round(cg,4),positive_halves=round(pos*len(tr)),worst_half=round(float(v.min()),4),
+        row=dict(rank=n,objective=round(ob,4),**({f'v4_{k}':round(val,4) for k,val in x4.items()} if x4 else {}),post_tax_cagr=round(cg,4),positive_halves=round(pos*len(tr)),worst_half=round(float(v.min()),4),
                  range=round(float(v.max()-v.min()),4),oos_2026H1=round(float(o),4))
         for s,r,w,d,t in (('green',G[i],wg[i],dg[i],ng[i]),('red',B[j],wb[j],db[j],nb[j])):
             row.update({f'{s}_{k}':r[k] for k in ('structure','level','config','profit','stop')});row.update({f'{s}_worst_trade':w,f'{s}_train_max_dd':d,f'{s}_trades':int(t)})
