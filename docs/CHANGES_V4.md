@@ -112,6 +112,19 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.20: v4 score, second version (user, 2026-11-25)
+
+`wide_search.V4` / `score_v4` (and `pair_picker --rank v4`) now:
+
+    10/max(Rfy, .10) - 50[Rfy > .40] - 40[Rhy > .30] - 40 n 2^(n-1) - 10 m 2^(m-1)
+    + 15([C > .25] + [C > .30] + [C > .35]) + 100 x ((C - .20) + (C - .25) + (C - .30) + (C - .35))
+    - (10[MDD > .075] + 10[MDD > .10] + 15[MDD > .125] + 15[MDD > .15] + 20[MDD > .175] + 30[MDD > .20] + 40[MDD > .225] + 50[MDD > .25])
+    - (3[TL > .03] + 6[TL > .05] + 9[TL > .065] + 20[TL > .08] + 30[TL > .095])
+
+n, m = negative train half-years, quarters (1 costs 40 / 10, 2 cost 160 / 40, 3 cost 480 / 120); C = min(post-tax CAGR without the best
+full year, .50). Changed from V4.9.19: range cliffs 40 -> 50 and 30 -> 40, negative counts grow as n 2^(n-1), three drawdown steps
+above 20%. Inputs and filters as V4.9.19.
+
 ## V4.9.19: the user's v4 score (pair ranking)
 
 Score (user, 2026-11-25), `wide_search.score_v4`, on train data only (2026H1 stays a check):

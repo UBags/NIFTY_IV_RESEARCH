@@ -229,7 +229,7 @@ class SpeedV4917(Fixture):
         self.assertIn('kernel',res['phases'])
 
 class ScoreV4919(unittest.TestCase):
-    """User score (2026-11-25): stability, capped CAGR without the best full year, drawdown and trade-loss steps, held-out year."""
+    """User score (2026-11-25, second version): stability, capped CAGR without the best full year, drawdown and trade-loss steps, held-out year."""
     ph=ws.Periods('2021-09-01','2026-01-01','2026-07-01','half');pq=ws.Periods('2021-09-01','2026-01-01','2026-07-01','quarter')
     def s(self,H,Q=None,mdd=0.,tl=0.,exclude=None):
         H=np.atleast_2d(np.asarray(H,float));Q=np.full((len(H),len(self.pq.train)),.01) if Q is None else np.atleast_2d(np.asarray(Q,float))
@@ -242,13 +242,17 @@ class ScoreV4919(unittest.TestCase):
         self.assertAlmostEqual(r['range_fy'],.56);self.assertAlmostEqual(r['range_hy'],.28)
         keep=np.array([p[:4]!='2022' for p in self.ph.train]);c=float(ws.post_tax_cagr(np.array(H),self.ph.train,keep,ws.fold(self.ph)[1]-1,.35))
         self.assertAlmostEqual(r['cagr_ex_best'],c)
-        self.assertAlmostEqual(r['stability'],10/.56-40);self.assertEqual(r['risk'],10+10+3+6+9+20)
+        self.assertAlmostEqual(r['stability'],10/.56-50);self.assertEqual(r['risk'],10+10+3+6+9+20)
         self.assertAlmostEqual(r['return_'],100*(4*c-1.1)+15*(c>.25)+15*(c>.30)+15*(c>.35))
         self.assertAlmostEqual(r['score'],r['stability']+r['return_']-r['risk'])
     def test_negatives_floor_and_cap(self):
         H=[.2]*9;Q=[.1]*18;Q[3]=-.01
         r=self.s(H,Q);self.assertEqual(r['neg_quarters'],1);self.assertAlmostEqual(r['stability'],100-10)   # range 0 -> floor .10
         r=self.s([.2]*8+[-.01]);self.assertEqual(r['neg_halves'],1)
+        two=self.s([.2]*6+[-.01,.2,-.01]);   # 2024H2 and 2025H2: same full-year and half ranges as one negative
+        self.assertEqual(two['neg_halves'],2);self.assertAlmostEqual(r['stability']-two['stability'],160-40)  # 40 x 2 x 2 vs 40
+        Q3=[.1]*18;Q3[3]=Q3[7]=Q3[11]=-.01;self.assertAlmostEqual(self.s(H,Q3)['stability'],100-10*3*4)                                      # 3 quarters: 120
+        self.assertEqual(self.s(H,mdd=.26)['risk'],10+10+15+15+20+30+40+50);self.assertEqual(self.s(H,mdd=.21)['risk'],10+10+15+15+20+30)
         big=self.s([2.]*9);self.assertGreater(big['cagr_ex_best'],.5);self.assertAlmostEqual(big['return_'],45+100*(4*.5-1.1))
     def test_one_great_year_loses_its_credit(self):
         steady=self.s([.25]*9);spike=self.s([.25,1.5,1.5]+[.0]*6)
