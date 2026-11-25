@@ -34,7 +34,7 @@ from nifty_iv.zone import signals as zs
 from nifty_iv.core import strategy_spec as ss
 from nifty_iv.core import cli
 
-PROVIDERS=('rissin_upstox','thetrademarkk')
+from nifty_iv.data.datasets import OPTION_DATASETS as PROVIDERS   # V4.9.18: one list (with nifty_2017_2020)
 STRUCTURES=('naked','calendar');OFFSETS=(-200,-100,0,100,200);TPS=(None,.25,.4,.5,.6,.75)
 ROLL_BAR_END=15*60+15
 END_KEY='9999-12-31'

@@ -11,28 +11,36 @@ Steps (each month is resumable):
      shortens holds), all structures and offsets. Each leg is needed from its fill day to its exit day
      plus --buffer-sessions (slow real exits), never past expiry.
   3. minutes: 09:15-15:29 bars for those (day, expiry, strike, type), both vendors, into opt_1m.
-Reads market_data only; never writes to PostgreSQL. Credentials from PG* variables."""
+Option rows come from data.datasets.OPTION_DATASETS (V4.9.18: with the 2017-2020 vendor data); rows hidden by an option blackout
+(--option-blackouts, config/option_blackouts.csv: January 2018) are left out of the listing and the minutes, so no option position
+is open across the window. Reads market_data only; never writes to PostgreSQL. Credentials from PG* variables."""
 import argparse,collections,datetime as dt,json,sqlite3,sys
 from pathlib import Path
 from types import SimpleNamespace
 from nifty_iv.data.research_cache import connect
+from nifty_iv.data import datasets as ds
 from nifty_iv.zone import signals as zs
 from nifty_iv.zone import backtest as zb
 from nifty_iv.core import cli
 
-LISTING_SQL='''SELECT DISTINCT to_char(b.trading_day,'YYYY-MM-DD'),f.dataset,to_char(b.expiry,'YYYY-MM-DD')
+LISTING_SQL=f'''SELECT DISTINCT to_char(b.trading_day,'YYYY-MM-DD'),f.dataset,to_char(b.expiry,'YYYY-MM-DD')
 FROM market_data.option_bars b JOIN market_data.import_files f ON f.file_id=b.source_file_id
 WHERE b.underlying='NIFTY' AND b.granularity='1min' AND b.option_type IN ('PE','CE') AND b.trading_day BETWEEN %s AND %s
- AND f.dataset IN ('rissin_upstox','thetrademarkk') AND f.status='completed' '''
-MINUTES_SQL='''SELECT DISTINCT ON (f.dataset,b.bar_time,b.expiry,b.strike,b.option_type)
+ AND {ds.OPTION_WHERE} AND f.status='completed' '''
+MINUTES_SQL=f'''SELECT DISTINCT ON (f.dataset,b.bar_time,b.expiry,b.strike,b.option_type)
  f.dataset,to_char(b.trading_day,'YYYY-MM-DD'),to_char(b.bar_time AT TIME ZONE 'Asia/Kolkata','HH24:MI'),to_char(b.expiry,'YYYY-MM-DD'),b.strike,b.option_type,b.open,b.high,b.low,b.close,b.volume
 FROM market_data.option_bars b
 JOIN zone_targets t ON b.trading_day=t.day AND b.expiry=t.expiry AND b.strike=t.strike AND b.option_type=t.cp
 JOIN market_data.import_files f ON f.file_id=b.source_file_id
 WHERE b.underlying='NIFTY' AND b.granularity='1min' AND b.trading_day BETWEEN %s AND %s
- AND f.dataset IN ('rissin_upstox','thetrademarkk') AND f.status='completed'
- AND (b.bar_time AT TIME ZONE 'Asia/Kolkata')::time BETWEEN '09:15'::time AND '15:29'::time
+ AND {ds.OPTION_WHERE} AND f.status='completed'
+ AND (b.bar_time AT TIME ZONE 'Asia/Kolkata')::time BETWEEN '09:15'::time AND '15:29'::time{{blackout}}
 ORDER BY f.dataset,b.bar_time,b.expiry,b.strike,b.option_type,b.source_row_index'''
+LISTING_SQL+='{blackout}'
+
+def with_blackouts(sql,windows):
+    """(SQL, extra params) with the option-blackout predicate in place of {blackout}; params follow the query's own."""
+    frag,params=ds.blackout_sql(windows);return sql.replace('{blackout}',frag),params
 DDL='''CREATE TABLE IF NOT EXISTS meta(name TEXT PRIMARY KEY,value TEXT);
 CREATE TABLE IF NOT EXISTS listing(day TEXT,provider TEXT,expiry TEXT,PRIMARY KEY(day,provider,expiry));
 CREATE TABLE IF NOT EXISTS targets(day TEXT,expiry TEXT,strike REAL,cp TEXT,PRIMARY KEY(day,expiry,strike,cp));
@@ -97,13 +105,19 @@ def main():
     ap.add_argument('--out',default='zone_options.sqlite');ap.add_argument('--buffer-sessions',type=int,default=3)
     ap.add_argument('--strike-pad',type=int,default=0,help='Also extract calendar strikes within this many points (multiples of 100) of the planned ones')
     ap.add_argument('--structures',default='naked,calendar',help='option structures to plan for: naked, naked_m1 (current-month monthly >= 21 days), naked_m2 (next-month monthly), calendar (V4.9.6); V4.9.14 multi-leg: vert_w1, vert_w2, married, covered, collar_w1, collar_w2, longopt, backspread_w1, backspread_w2 (use a new --out)')
-    a=ap.parse_args();a.structures_list=[x for x in a.structures.split(',') if x];db=sqlite3.connect(a.out);db.executescript(DDL)
+    ap.add_argument('--option-blackouts',default=str(ds.BLACKOUTS),help='windows in which no option position may be held (from,to,reason; none = no windows): '
+                    'option rows of contracts alive on `from` are hidden up to `to` (V4.9.18; recorded in the plan when the run starts before a window ends)')
+    a=ap.parse_args();a.structures_list=[x for x in a.structures.split(',') if x]
+    windows=ds.blackouts_in(ds.read_blackouts(a.option_blackouts),a.from_date)
+    for f,t,why in windows:print(f'option blackout {f}..{t}: contracts alive on {f} hidden up to {t} ({why[:90]})',flush=True)
+    listing_sql,lparams=with_blackouts(LISTING_SQL,windows);minutes_sql,mparams=with_blackouts(MINUTES_SQL,windows)
+    db=sqlite3.connect(a.out);db.executescript(DDL)
     done={r[0] for r in db.execute('SELECT step FROM progress')}
     with connect() as pg:
         pg.autocommit=True   # each month's temp table lives in its own explicit transaction
         for lo,hi in months(a.from_date,a.to_date):
             if f'listing {lo}' in done:continue
-            rows=pg.execute(LISTING_SQL,(lo,hi)).fetchall()
+            rows=pg.execute(listing_sql,(lo,hi,*lparams)).fetchall()
             db.executemany('INSERT OR IGNORE INTO listing VALUES(?,?,?)',rows);db.execute('INSERT INTO progress VALUES(?,?)',(f'listing {lo}',len(rows)));db.commit()
             print('listing',lo,len(rows),flush=True)
         listing=collections.defaultdict(set)
@@ -112,6 +126,7 @@ def main():
         plan['offsets']=list(zb.parse_offsets(a.offsets,a.offset_mode))
         if a.offset_mode!='points':plan['offset_mode']=a.offset_mode
         if a.structures_list!=['naked','calendar']:plan['structures']=a.structures_list   # older plans (no keys) stay valid for naked + calendar in points
+        if windows:plan['option_blackouts']=[[f,t] for f,t,_ in windows]                  # V4.9.18; runs starting after every window keep their old plan
         old=db.execute("SELECT value FROM meta WHERE name='plan'").fetchone()
         if old and json.loads(old[0])!=plan:sys.exit(f'{a.out} was planned with {old[0]}; use a new --out')
         if not old:
@@ -137,7 +152,7 @@ def main():
                     with pg.cursor().copy('COPY zone_targets(day,expiry,strike,cp) FROM STDIN') as cp:
                         for r in tg:cp.write_row(r)
                     pg.execute('ANALYZE zone_targets')
-                    rows=[(p,d,m,e,float(k),c,*(None if x is None else float(x) for x in (o,h,l,cl)),None if v is None else int(v)) for p,d,m,e,k,c,o,h,l,cl,v in pg.execute(MINUTES_SQL,(lo,hi))]
+                    rows=[(p,d,m,e,float(k),c,*(None if x is None else float(x) for x in (o,h,l,cl)),None if v is None else int(v)) for p,d,m,e,k,c,o,h,l,cl,v in pg.execute(minutes_sql,(lo,hi,*mparams))]
                 db.executemany('INSERT OR REPLACE INTO opt_1m VALUES(?,?,?,?,?,?,?,?,?,?,?)',rows);n=len(rows)
             db.execute('INSERT OR REPLACE INTO progress VALUES(?,?)',(f'minutes {lo}',n));db.commit()
             print('minutes',lo,'contract-days',len(tg),'bars',n,flush=True)

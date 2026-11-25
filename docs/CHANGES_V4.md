@@ -112,6 +112,24 @@ only changes that kept exact equality and measured faster were taken.
 
 # V4.9.7 (user's directions of 2026-11-13, after the first real-data grid)
 
+## V4.9.18 (engine): the 2017-2020 block in the zone pipeline
+
+The 2017-2020 data is a separate block: the database has no spot for January to mid-May 2021 (options from 7 May), so the 2017-2020
+bars must not be joined to the 2021+ bars. Each block has its own spot file, extraction and paths file.
+
+| Change | What |
+|---|---|
+| `nifty_iv.data.datasets` | One place for the datasets the zone pipeline reads: option datasets `rissin_upstox`, `thetrademarkk`, `nifty_2017_2020`; spot = the canonical file or `nifty_2017_2020` (the canonical file wins a shared minute; there are none). `zone.backtest.PROVIDERS` is this list. |
+| Option blackouts (`config/option_blackouts.csv`) | A window in which no option position may be held: option rows of contracts alive on `from` (expiry >= from) are hidden for trading days up to `to`. January 2018 (user rule: every option position closed by the last December session, option strategies restart 1 Feb 2018): the February contract rows of 28 Dec 2017 - 31 Jan 2018 are hidden; the December contract (expiry 28 Dec) is untouched. With no listing, no option entry is possible in the window and none can be carried into it. `futures_zone` keeps trading; `futures_expiry` and the futures combos take their expiry from the option listing, so they pause too. |
+| `nifty-zone-contracts` | Reads `datasets.OPTION_DATASETS`; `--option-blackouts` (default the config file, `none` = no windows). The windows are recorded in the plan only when the run starts before a window ends, so existing 2021+ extractions keep their plans. |
+| `nifty-zone-spot` | Reads both spot sources. `--max-gap-days` (default 10): refuses, before writing anything, when consecutive sessions (database range plus what `--out` holds) are further apart, e.g. 2020-12-31 -> 2021-05-24. `--from-date` default 2021-01-01 (was 2020-01-01): the canonical file starts 2021-05-24, so the default output is unchanged. |
+| `scripts/block_build_cmds.py` | Prints the spot, extraction and paths commands of a block (default 2017-01-01 spot, signals from 2017-07-03, to 2020-12-31, `runs/b1720`) with the settings and combined structures of existing paths files. |
+| `tests/test_datasets_2017_2020.py` | Blackout rule and scope, SQL parameters, gap guard; PostgreSQL (rolled back): the January 2018 listing, spot source priority. |
+
+Not changed: `nifty-data-research-cache` (the dormant relative-IV pipeline) still reads only the canonical spot file and the two
+older option datasets. `config/nse_holidays.txt` is not merged with the 2017-2020 list (that would change every grid's signature):
+runs on the block pass `--holidays config/nse_holidays_2017_2020.txt`.
+
 ## V4.9.18 (data): the 2017-2020 vendor files into market_data
 
 | Change | What |
@@ -120,7 +138,7 @@ only changes that kept exact equality and measured faster were taken.
 | `nifty_iv.data.vendor_2017_2020` | Shared readers: zips of zips (CSV copy preferred), the three file-name styles, strict row parsing, expiry calendar. |
 | `scripts/survey_2017_2020.py`, `check_2017_2020.py`, `attribute_2017_2020.py` | The three pre-import passes (inventory and conventions; overlaps, rolls, ladder, calendar, database; per file-day expiry attribution). |
 | `config/nse_holidays_2017_2020.txt` | NSE holidays 2017-2020 (Muhurat days as holidays). Kept apart from `nse_holidays.txt` until a run uses 2017-2020: changing that file changes the grid signature. |
-| `config/import_2017_2020_overrides.csv` | Empty template for hand overrides. |
+| `config/import_2017_2020_overrides.csv` | Hand overrides from the attribution: the April 2017 zip before 31 March dropped (mixed copies); the March 2018 zip rows up to 22 February stored as the February contract. |
 | `tests/test_import_2017_2020.py` | Names, calendar, parsing, session / shift, duplicates, nested zips, copies, overrides, expiry check; PostgreSQL: an interrupted unit leaves nothing, a rerun completes it (NIFTY_TEST_PG=1). |
 
 ## Finding that drove it

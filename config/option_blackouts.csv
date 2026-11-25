@@ -1,0 +1,5 @@
+# Option blackouts (src/nifty_iv/data/datasets.py): every option row of a contract still alive on `from` (expiry >= from) is hidden
+# for trading days up to `to`. No option position can be carried into the window, none trades inside it; futures structures that
+# need no option listing (futures_zone) are not affected.
+from,to,reason
+2018-01-01,2018-01-31,"Vendor January 2018 monthly option file missing. User rule: close every option position on or before the last December session (29 Dec 2017); option strategies restart from 1 Feb 2018. Hides the February contract rows of 28 Dec 2017 - 31 Jan 2018 (March 2018 zip, re-dated to 22 Feb) and the February zip rows before 1 Feb."
