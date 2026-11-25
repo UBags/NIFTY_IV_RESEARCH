@@ -6,6 +6,7 @@
 | Stage-1 phase timing | Each stage-1 group file records seconds per phase (load, batch, evaluate, dedup, gather, kernel, score, select), the distinct signal lists and exit rows. `--groups side:structure:level,...` limits a run to those groups. `scripts/profile_stage1.py`: phase table for chosen groups of the real paths file (scratch folder) and the distinct-signal-list share per side |
 | Note | The stage-1 signature hashes the code, so stage-1 files made before V4.9.17 are recomputed once (results are the same) |
 | `run_v4_pipeline.sh` | Running-step check: no awk escape warning; only a pipeline tool itself or python / bash running it counts (not an editor or `tail` on its files) |
+| `scripts/pair_rank.py` (user) | Every green x red pair of a pool (no limits, no eliminations, legs may repeat) ranked by the user's alternate score: 10/max(half range, 5%) - 30 [range > 40%] - 30 x negative halves - 10 x negative quarters + 15 [CAGR > s1] + 15 [> s2] + 15 [> s3] (`--steps`, default 0.35,0.35,0.25 as written) + 25 x sum of max(CAGR - t, 0), t = 20/25/30/35%. Leave-one-year-out: the ranking redone without each year; held-out post-tax CAGR at each rank and of the top-N basket; how often a pair stays in the top N. Dry run on the v4 wide-search pool: 677,336 pairs in 12 s, figures match pair_picker |
 | Tests | `tests/test_wide_search.py::SpeedV4917` 3 (robust kernel = numpy, tax loop = numpy bit for bit, configurations sharing a signal list get identical rows) |
 
 # V4.9.16 (2026-11-24)
